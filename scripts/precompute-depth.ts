@@ -1,5 +1,5 @@
 import { exec as execCallback } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -29,11 +29,7 @@ interface DepthMetaFile {
 }
 
 void main().catch((error: unknown) => {
-  if (error instanceof Error) {
-    console.error(error.message);
-  } else {
-    console.error('Failed to precompute depth data.', error);
-  }
+  console.error(error);
   process.exitCode = 1;
 });
 
@@ -70,17 +66,28 @@ async function main(): Promise<void> {
     const estimator = await pipeline('depth-estimation', DEPTH_MODEL);
 
     const bytesPerFrame = OUTPUT_WIDTH * OUTPUT_HEIGHT;
-    const packedDepth = Buffer.allocUnsafe(4 + framePaths.length * bytesPerFrame);
-    const header = new DataView(packedDepth.buffer, packedDepth.byteOffset, packedDepth.byteLength);
-    header.setUint32(0, framePaths.length, true);
+    const depthDataFile = await open(depthDataPath, 'w');
+    try {
+      const headerBytes = new Uint8Array(4);
+      const header = new DataView(headerBytes.buffer, headerBytes.byteOffset, headerBytes.byteLength);
+      header.setUint32(0, framePaths.length, true);
+      await depthDataFile.write(headerBytes);
 
-    for (let index = 0; index < framePaths.length; index += 1) {
-      console.log(`Processing frame ${index + 1}/${framePaths.length}...`);
-      const depthFrame = await computeDepthFrame(estimator, framePaths[index]);
-      packedDepth.set(depthFrame, 4 + index * bytesPerFrame);
+      for (let index = 0; index < framePaths.length; index += 1) {
+        console.log(`Processing frame ${index + 1}/${framePaths.length}...`);
+        const depthFrame = await computeDepthFrame(estimator, framePaths[index]);
+
+        if (depthFrame.byteLength !== bytesPerFrame) {
+          throw new Error(
+            `Depth frame ${index + 1} has invalid length ${depthFrame.byteLength}, expected ${bytesPerFrame}.`
+          );
+        }
+
+        await depthDataFile.write(depthFrame);
+      }
+    } finally {
+      await depthDataFile.close();
     }
-
-    await writeFile(depthDataPath, packedDepth);
 
     const meta: DepthMetaFile = {
       frameCount: framePaths.length,
@@ -122,6 +129,7 @@ async function computeDepthFrame(
     },
   })
     .resize(OUTPUT_WIDTH, OUTPUT_HEIGHT, { fit: 'fill', kernel: sharp.kernel.bilinear })
+    .toColourspace('b-w')
     .raw()
     .toBuffer();
 
