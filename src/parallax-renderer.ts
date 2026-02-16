@@ -41,10 +41,14 @@ class LayerFrameRingBuffer {
 }
 
 export class ParallaxRenderer {
+  private static readonly RESIZE_DEBOUNCE_MS = 100;
+  private static readonly OVERSCAN_MULTIPLIER = 1.15;
+
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
   private readonly renderer: THREE.WebGLRenderer;
   private readonly frameCache: LayerFrameRingBuffer;
+  private readonly container: HTMLElement;
   private textures: THREE.DataTexture[] = [];
   private meshes: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
   private frameWidth = 1;
@@ -57,6 +61,10 @@ export class ParallaxRenderer {
   private fps = 12;
   private lagFrames = 0;
   private lastTimeSec = 0;
+  private resizeObserver: ResizeObserver | null = null;
+  private resizeTimer: number | null = null;
+  private currentPlaneWidth = 1;
+  private currentPlaneHeight = 1;
 
   constructor(
     parent: HTMLElement,
@@ -64,6 +72,7 @@ export class ParallaxRenderer {
     private readonly maxOffsetPx: number,
     ringBufferSize: number
   ) {
+    this.container = parent;
     this.frameCache = new LayerFrameRingBuffer(ringBufferSize);
 
     this.renderer = new THREE.WebGLRenderer({
@@ -73,9 +82,8 @@ export class ParallaxRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 1);
 
-    parent.appendChild(this.renderer.domElement);
-    window.addEventListener('resize', this.handleResize);
-    this.handleResize();
+    this.container.appendChild(this.renderer.domElement);
+    this.setupResizeHandling();
   }
 
   initialize(width: number, height: number): void {
@@ -83,7 +91,8 @@ export class ParallaxRenderer {
 
     this.frameWidth = width;
     this.frameHeight = height;
-    const geometry = new THREE.PlaneGeometry(width, height);
+    this.currentPlaneWidth = 0;
+    this.currentPlaneHeight = 0;
 
     for (let layerIndex = 0; layerIndex < this.layerCount; layerIndex += 1) {
       const empty = new Uint8Array(width * height * 4);
@@ -108,7 +117,7 @@ export class ParallaxRenderer {
         depthTest: false,
       });
 
-      const mesh = new THREE.Mesh(geometry, material);
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
       mesh.renderOrder = layerIndex;
       mesh.position.z = -layerIndex * 0.1;
 
@@ -117,7 +126,7 @@ export class ParallaxRenderer {
       this.meshes.push(mesh);
     }
 
-    this.handleResize();
+    this.recalculateViewportLayout();
   }
 
   start(
@@ -152,7 +161,15 @@ export class ParallaxRenderer {
     this.stop();
     this.disposeSceneLayers();
     this.renderer.dispose();
-    window.removeEventListener('resize', this.handleResize);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    window.removeEventListener('resize', this.scheduleResizeRecalculate);
+    if (this.resizeTimer !== null) {
+      window.clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
+    }
   }
 
   private readonly renderLoop = () => {
@@ -230,11 +247,32 @@ export class ParallaxRenderer {
     }
   }
 
-  private readonly handleResize = () => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+  private setupResizeHandling(): void {
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.scheduleResizeRecalculate();
+      });
+      this.resizeObserver.observe(this.container);
+    }
 
-    this.renderer.setSize(width, height);
+    window.addEventListener('resize', this.scheduleResizeRecalculate);
+    this.recalculateViewportLayout();
+  }
+
+  private readonly scheduleResizeRecalculate = () => {
+    if (this.resizeTimer !== null) {
+      window.clearTimeout(this.resizeTimer);
+    }
+    this.resizeTimer = window.setTimeout(() => {
+      this.resizeTimer = null;
+      this.recalculateViewportLayout();
+    }, ParallaxRenderer.RESIZE_DEBOUNCE_MS);
+  };
+
+  private recalculateViewportLayout(): void {
+    const { width, height } = this.getViewportSize();
+
+    this.renderer.setSize(width, height, false);
     this.camera.left = -width / 2;
     this.camera.right = width / 2;
     this.camera.top = height / 2;
@@ -242,11 +280,50 @@ export class ParallaxRenderer {
     this.camera.position.z = 1;
     this.camera.updateProjectionMatrix();
 
-    const fitScale = Math.max(width / this.frameWidth, height / this.frameHeight);
-    for (const mesh of this.meshes) {
-      mesh.scale.set(fitScale, fitScale, 1);
+    const { planeWidth, planeHeight } = this.computeCoverPlaneSize(width, height);
+    if (
+      Math.abs(this.currentPlaneWidth - planeWidth) < 0.5 &&
+      Math.abs(this.currentPlaneHeight - planeHeight) < 0.5
+    ) {
+      return;
     }
-  };
+    this.currentPlaneWidth = planeWidth;
+    this.currentPlaneHeight = planeHeight;
+
+    for (const mesh of this.meshes) {
+      const oldGeometry = mesh.geometry;
+      mesh.geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+      oldGeometry.dispose();
+    }
+  }
+
+  private getViewportSize(): { width: number; height: number } {
+    const width = Math.max(1, Math.round(this.container.clientWidth || window.innerWidth));
+    const height = Math.max(1, Math.round(this.container.clientHeight || window.innerHeight));
+    return { width, height };
+  }
+
+  private computeCoverPlaneSize(
+    viewportWidth: number,
+    viewportHeight: number
+  ): { planeWidth: number; planeHeight: number } {
+    const sourceAspect = this.frameWidth / this.frameHeight;
+    const viewportAspect = viewportWidth / viewportHeight;
+
+    let coverWidth = viewportWidth;
+    let coverHeight = viewportHeight;
+    if (viewportAspect > sourceAspect) {
+      coverHeight = viewportWidth / sourceAspect;
+    } else {
+      coverWidth = viewportHeight * sourceAspect;
+    }
+
+    const overscan = this.maxOffsetPx * ParallaxRenderer.OVERSCAN_MULTIPLIER;
+    return {
+      planeWidth: coverWidth + overscan * 2,
+      planeHeight: coverHeight + overscan * 2,
+    };
+  }
 
   private disposeSceneLayers(): void {
     for (const mesh of this.meshes) {
