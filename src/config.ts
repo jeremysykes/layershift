@@ -1,6 +1,5 @@
 export const APP_CONFIG = {
-  videoUrl:
-    'https://videos.pexels.com/video-files/4328401/4328401-hd_1920_1080_25fps.mp4',
+  videoUrl: '/sample.mp4',
   extractionFps: 12,
   maxVideoDurationSec: 8,
   workingMaxWidth: 512,

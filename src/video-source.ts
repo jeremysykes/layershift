@@ -25,8 +25,13 @@ const SEEK_EPSILON_SECONDS = 0.001;
 export async function createHiddenVideoElement(url: string): Promise<HTMLVideoElement> {
   const video = document.createElement('video');
   video.crossOrigin = 'anonymous';
+  video.setAttribute('crossorigin', 'anonymous');
   video.playsInline = true;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', 'true');
   video.muted = true;
+  video.defaultMuted = true;
+  video.setAttribute('muted', '');
   video.loop = true;
   video.preload = 'auto';
   video.style.display = 'none';
