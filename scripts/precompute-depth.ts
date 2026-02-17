@@ -34,6 +34,8 @@ void main().catch((error: unknown) => {
 });
 
 async function main(): Promise<void> {
+  await ensureFfmpegAvailable();
+
   const inputVideoPath = resolve(process.argv[2] ?? './public/sample.mp4');
   const publicDir = resolve('./public');
   const depthDataPath = resolve('./public/depth-data.bin');
@@ -195,6 +197,21 @@ function normalizeToUint8(source: Float32Array): Uint8Array {
     out[i] = Math.round(((source[i] - min) / range) * 255);
   }
   return out;
+}
+
+async function ensureFfmpegAvailable(): Promise<void> {
+  const installHint =
+    'Install FFmpeg (includes ffprobe and ffmpeg): https://ffmpeg.org — e.g. on macOS: brew install ffmpeg';
+  try {
+    await exec('ffprobe -version', { maxBuffer: 4096 });
+  } catch {
+    throw new Error(`ffprobe was not found. ${installHint}`);
+  }
+  try {
+    await exec('ffmpeg -version', { maxBuffer: 4096 });
+  } catch {
+    throw new Error(`ffmpeg was not found. ${installHint}`);
+  }
 }
 
 async function readSourceFps(videoPath: string): Promise<number> {
