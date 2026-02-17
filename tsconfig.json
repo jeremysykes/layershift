@@ -9,7 +9,16 @@
     "isolatedModules": true,
     "strict": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx"
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "vite.config.component.ts"],
+  "exclude": [
+    "src/components/depth-parallax/wrappers/react.tsx",
+    "src/components/depth-parallax/wrappers/angular.ts",
+    "src/components/depth-parallax/wrappers/vue.vue",
+    "src/components/depth-parallax/wrappers/Svelte.svelte",
+    "src/components/depth-parallax/wrappers/vanilla.js",
+    "src/components/depth-parallax/global.d.ts"
+  ]
 }

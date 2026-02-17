@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>depth-parallax Embed Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; color: #ccc; font-family: system-ui, sans-serif; }
+    h1 { text-align: center; padding: 2rem 1rem 1rem; font-size: 1.2rem; color: #fff; }
+    .test-fullscreen {
+      width: 100vw;
+      height: 100vh;
+    }
+    .test-inline {
+      max-width: 800px;
+      aspect-ratio: 16 / 9;
+      margin: 2rem auto;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    p { text-align: center; padding: 1rem; font-size: 0.9rem; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Standalone Embed Test</h1>
+  <p>Full-viewport instance:</p>
+  <div class="test-fullscreen">
+    <depth-parallax
+      src="/sample.mp4"
+      depth-src="/depth-data.bin"
+      depth-meta="/depth-meta.json"
+    ></depth-parallax>
+  </div>
+
+  <p>Inline instance (16:9, 800px max):</p>
+  <div class="test-inline">
+    <depth-parallax
+      src="/sample.mp4"
+      depth-src="/depth-data.bin"
+      depth-meta="/depth-meta.json"
+      parallax-x="0.4"
+      parallax-y="1.0"
+    ></depth-parallax>
+  </div>
+
+  <script type="module" src="/src/components/depth-parallax/index.ts"></script>
+</body>
+</html>

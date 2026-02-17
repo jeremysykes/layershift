@@ -1,19 +1,35 @@
 {
   "name": "depth-aware-parallax-video",
   "version": "1.0.0",
-  "description": "Depth-Aware Parallax Video",
+  "description": "Embeddable depth-aware parallax video Web Component",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "precompute": "npx tsx scripts/precompute-depth.ts",
     "build": "tsc && vite build",
+    "build:component": "vite build --config vite.config.component.ts",
+    "package": "npx tsx scripts/package-output.ts",
     "preview": "vite preview"
+  },
+  "exports": {
+    ".": "./src/components/depth-parallax/index.ts",
+    "./react": "./src/components/depth-parallax/wrappers/react.tsx",
+    "./vue": "./src/components/depth-parallax/wrappers/vue.vue",
+    "./svelte": "./src/components/depth-parallax/wrappers/Svelte.svelte",
+    "./angular": "./src/components/depth-parallax/wrappers/angular.ts",
+    "./types": "./src/components/depth-parallax/types.ts"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jeremysykes/depth-aware-parallax-video.git"
   },
-  "keywords": [],
+  "keywords": [
+    "parallax",
+    "video",
+    "depth",
+    "web-component",
+    "three.js"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {

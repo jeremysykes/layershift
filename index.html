@@ -3,10 +3,289 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Depth-Aware Parallax Video</title>
+    <title>Depth Parallax — Embeddable Video Effects</title>
+    <meta name="description" content="Ready-to-embed Web Components that make video feel alive on any website. No framework dependencies. One script tag." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+
+    <!-- ============================================================ -->
+    <!-- Hero — full-viewport depth parallax                           -->
+    <!-- ============================================================ -->
+
+    <div id="hero">
+      <depth-parallax
+        src="/sample.mp4"
+        depth-src="/depth-data.bin"
+        depth-meta="/depth-meta.json"
+        parallax-x="0.4"
+        parallax-y="1.0"
+        parallax-max="30"
+      ></depth-parallax>
+    </div>
+
+    <div id="hero-scroll-hint">
+      <span class="chevron"></span>
+      <span>Scroll</span>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Content                                                       -->
+    <!-- ============================================================ -->
+
+    <div class="content">
+
+      <!-- Intro -->
+      <section class="section reveal">
+        <div class="section-inner">
+          <h2>Embeddable video effects</h2>
+          <p>
+            Ready-to-embed components that make video feel alive on any website.
+            No framework dependencies. One script tag. Works in plain HTML,
+            React, Vue, Svelte, Angular, WordPress&nbsp;&mdash; anywhere.
+          </p>
+        </div>
+      </section>
+
+      <!-- Depth Parallax -->
+      <section class="section reveal">
+        <div class="section-inner">
+          <h2>Depth Parallax</h2>
+          <p>
+            Adds depth-aware parallax motion to any video. Near objects move
+            more than far objects, creating a convincing 3D effect from a
+            single 2D video. Move your mouse over the demo below.
+          </p>
+
+          <!-- Inline demo -->
+          <div class="inline-demo">
+            <depth-parallax
+              src="/sample.mp4"
+              depth-src="/depth-data.bin"
+              depth-meta="/depth-meta.json"
+              parallax-x="0.4"
+              parallax-y="1.0"
+              parallax-max="30"
+            ></depth-parallax>
+          </div>
+
+          <!-- Embed code -->
+          <p>One script tag. One element.</p>
+
+          <div class="code-block"><code><span class="comment">&lt;!-- Add the script --&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/depth-parallax.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+
+<span class="comment">&lt;!-- Use the element --&gt;</span>
+<span class="tag">&lt;depth-parallax</span>
+  <span class="attr">src</span>=<span class="string">"video.mp4"</span>
+  <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+  <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+<span class="tag">&gt;&lt;/depth-parallax&gt;</span></code></div>
+
+          <!-- Framework tabs -->
+          <div class="framework-tabs">
+            <div class="tab-bar">
+              <button class="tab-btn active" data-tab="html">HTML</button>
+              <button class="tab-btn" data-tab="react">React</button>
+              <button class="tab-btn" data-tab="vue">Vue</button>
+              <button class="tab-btn" data-tab="svelte">Svelte</button>
+              <button class="tab-btn" data-tab="angular">Angular</button>
+            </div>
+
+            <div class="tab-panel active" data-tab="html">
+              <div class="code-block"><code><span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/depth-parallax.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+
+<span class="tag">&lt;depth-parallax</span>
+  <span class="attr">src</span>=<span class="string">"video.mp4"</span>
+  <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+  <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+<span class="tag">&gt;&lt;/depth-parallax&gt;</span></code></div>
+            </div>
+
+            <div class="tab-panel" data-tab="react">
+              <div class="code-block"><code><span class="tag">import</span> { DepthParallax } <span class="tag">from</span> <span class="string">'depth-parallax/react'</span>
+
+<span class="tag">export default function</span> Hero() {
+  <span class="tag">return</span> (
+    <span class="tag">&lt;DepthParallax</span>
+      <span class="attr">src</span>=<span class="string">"video.mp4"</span>
+      <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
+      <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
+    <span class="tag">/&gt;</span>
+  )
+}</code></div>
+            </div>
+
+            <div class="tab-panel" data-tab="vue">
+              <div class="code-block"><code><span class="tag">&lt;template&gt;</span>
+  <span class="tag">&lt;DepthParallax</span>
+    <span class="attr">src</span>=<span class="string">"video.mp4"</span>
+    <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+    <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+  <span class="tag">/&gt;</span>
+<span class="tag">&lt;/template&gt;</span>
+
+<span class="tag">&lt;script setup&gt;</span>
+<span class="tag">import</span> DepthParallax <span class="tag">from</span> <span class="string">'depth-parallax/vue'</span>
+<span class="tag">&lt;/script&gt;</span></code></div>
+            </div>
+
+            <div class="tab-panel" data-tab="svelte">
+              <div class="code-block"><code><span class="tag">&lt;script&gt;</span>
+  <span class="tag">import</span> DepthParallax <span class="tag">from</span> <span class="string">'depth-parallax/svelte'</span>
+<span class="tag">&lt;/script&gt;</span>
+
+<span class="tag">&lt;DepthParallax</span>
+  <span class="attr">src</span>=<span class="string">"video.mp4"</span>
+  <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
+  <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
+<span class="tag">/&gt;</span></code></div>
+            </div>
+
+            <div class="tab-panel" data-tab="angular">
+              <div class="code-block"><code><span class="tag">import</span> { DepthParallaxComponent } <span class="tag">from</span> <span class="string">'depth-parallax/angular'</span>
+
+@Component({
+  <span class="attr">imports</span>: [DepthParallaxComponent],
+  <span class="attr">template</span>: <span class="string">`
+    &lt;app-depth-parallax
+      src="video.mp4"
+      depthSrc="depth-data.bin"
+      depthMeta="depth-meta.json"
+    /&gt;
+  `</span>
+})
+<span class="tag">export class</span> HeroComponent {}</code></div>
+            </div>
+          </div>
+
+          <!-- Configuration table -->
+          <h3 style="color: #fff; margin-bottom: 0.75rem; font-size: 1.1rem;">Configuration</h3>
+
+          <table class="config-table">
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Type</th>
+                <th>Default</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>src</code></td>
+                <td>string</td>
+                <td>&mdash;</td>
+                <td>Video file URL (required)</td>
+              </tr>
+              <tr>
+                <td><code>depth-src</code></td>
+                <td>string</td>
+                <td>&mdash;</td>
+                <td>Precomputed depth binary URL (required)</td>
+              </tr>
+              <tr>
+                <td><code>depth-meta</code></td>
+                <td>string</td>
+                <td>&mdash;</td>
+                <td>Depth metadata JSON URL (required)</td>
+              </tr>
+              <tr>
+                <td><code>parallax-x</code></td>
+                <td>number</td>
+                <td>0.4</td>
+                <td>Horizontal parallax intensity</td>
+              </tr>
+              <tr>
+                <td><code>parallax-y</code></td>
+                <td>number</td>
+                <td>1.0</td>
+                <td>Vertical parallax intensity</td>
+              </tr>
+              <tr>
+                <td><code>parallax-max</code></td>
+                <td>number</td>
+                <td>30</td>
+                <td>Max pixel offset for nearest layer</td>
+              </tr>
+              <tr>
+                <td><code>overscan</code></td>
+                <td>number</td>
+                <td>0.05</td>
+                <td>Extra padding to prevent edge reveal</td>
+              </tr>
+              <tr>
+                <td><code>autoplay</code></td>
+                <td>boolean</td>
+                <td>true</td>
+                <td>Auto-play on element mount</td>
+              </tr>
+              <tr>
+                <td><code>loop</code></td>
+                <td>boolean</td>
+                <td>true</td>
+                <td>Loop video playback</td>
+              </tr>
+              <tr>
+                <td><code>muted</code></td>
+                <td>boolean</td>
+                <td>true</td>
+                <td>Muted playback (required for autoplay)</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Prepare your video -->
+          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Prepare your video</h3>
+          <p>
+            Videos need precomputed depth data. Run the CLI tool on your video
+            once &mdash; it produces the depth binary and metadata files. Then embed.
+          </p>
+          <div class="code-block"><code><span class="comment"># Install</span>
+npm install depth-aware-parallax-video
+
+<span class="comment"># Generate depth data</span>
+npm run precompute -- your-video.mp4</code></div>
+          <p>
+            <a href="https://github.com/jeremysykes/depth-aware-parallax-video" target="_blank" rel="noopener">
+              View on GitHub &rarr;
+            </a>
+          </p>
+        </div>
+      </section>
+
+      <!-- Coming soon -->
+      <section class="section muted-section reveal">
+        <div class="section-inner">
+          <h2>More effects coming soon</h2>
+          <p>
+            Additional embeddable video effects are in development.
+          </p>
+          <a
+            class="cta-link"
+            href="https://github.com/jeremysykes/depth-aware-parallax-video"
+            target="_blank"
+            rel="noopener"
+          >
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="footer-links">
+          <span>Built by <a href="https://github.com/jeremysykes" target="_blank" rel="noopener">Jeremy</a></span>
+          <a href="https://github.com/jeremysykes/depth-aware-parallax-video" target="_blank" rel="noopener" aria-label="GitHub">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          </a>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/site/main.ts"></script>
   </body>
 </html>
