@@ -119,31 +119,98 @@ const FRAGMENT_SHADER = /* glsl */ `
   /** Number of ray-march steps for POM (runtime-adjustable). */
   uniform int uPomSteps;
 
+  /** Texel size for depth texture (1.0 / depthResolution). */
+  uniform vec2 uDepthTexelSize;
+
   // ---- Varyings ----
 
   /** Interpolated texture coordinates from vertex shader. */
   varying vec2 vUv;
 
+  // ---- Helper functions ----
+
+  /**
+   * Sample depth with a 3x3 box blur.
+   *
+   * Depth maps from monocular estimators (Depth Anything etc.) have
+   * sharp, sometimes noisy boundaries between objects. When these
+   * hard edges are used for UV displacement, they create visible
+   * stretching artifacts — the UV samples on either side of the edge
+   * get pulled in opposite directions.
+   *
+   * A 3x3 box blur softens these boundaries, producing a gradual
+   * depth gradient that displaces UVs smoothly. The cost is 9
+   * texture lookups instead of 1, but at 512x512 depth resolution
+   * this is negligible.
+   */
+  float sampleDepthSmooth(vec2 uv) {
+    float sum = 0.0;
+    for (int dy = -1; dy <= 1; dy++) {
+      for (int dx = -1; dx <= 1; dx++) {
+        vec2 offset = vec2(float(dx), float(dy)) * uDepthTexelSize;
+        sum += texture2D(uDepth, uv + offset).r;
+      }
+    }
+    return sum / 9.0;
+  }
+
+  /**
+   * Compute an edge fade factor that reduces displacement near UV
+   * boundaries.
+   *
+   * Without this, pixels near the texture edge can get displaced
+   * past the valid [0,1] range. The UV clamp catches this, but
+   * the clamped region appears as a stretched band. By smoothly
+   * reducing displacement to zero near edges, the fade prevents
+   * visible edge artifacts.
+   *
+   * The fade margin is proportional to the parallax strength so
+   * it adapts automatically if strength is tuned.
+   */
+  float edgeFade(vec2 uv) {
+    float margin = uStrength * 1.5;
+    float fadeX = smoothstep(0.0, margin, uv.x) * smoothstep(0.0, margin, 1.0 - uv.x);
+    float fadeY = smoothstep(0.0, margin, uv.y) * smoothstep(0.0, margin, 1.0 - uv.y);
+    return fadeX * fadeY;
+  }
+
   // ---- Displacement functions ----
 
   /**
-   * Basic UV displacement.
+   * Basic UV displacement with depth smoothing and edge fade.
    *
    * Offsets the sampling position proportionally to the depth at this
    * fragment. Inverts depth so that near pixels (depth ≈ 0) receive
    * maximum displacement and far pixels (depth ≈ 1) receive none.
    *
-   * The displacement direction follows the input offset, creating
-   * apparent perspective shift as the user moves their mouse or
-   * tilts their device.
+   * Depth is sampled with a 3x3 blur to soften hard boundaries.
+   * A smoothstep contrast curve pushes mid-tones for cleaner
+   * separation between foreground and background.
+   *
+   * Vertical displacement is halved — our eyes are much more
+   * sensitive to horizontal parallax, and full vertical displacement
+   * tends to look unnatural.
    */
   vec2 basicDisplace(vec2 uv) {
-    float depth = texture2D(uDepth, uv).r;
+    float depth = sampleDepthSmooth(uv);
+
+    // Contrast curve: pushes mid-tones toward 0 or 1, reducing
+    // noisy mid-depth artifacts while keeping the near/far split clean.
+    depth = smoothstep(0.05, 0.95, depth);
 
     // Invert: near (0) → max displacement, far (1) → no displacement
     float displacement = (1.0 - depth) * uStrength;
 
-    return uv + uOffset * displacement;
+    // Reduce displacement near edges to prevent border stretching
+    displacement *= edgeFade(uv);
+
+    // Apply offset with reduced vertical component (0.5x).
+    // Horizontal parallax is the primary depth cue — vertical
+    // parallax at full strength looks like floating/swimming.
+    vec2 offset = uOffset * displacement;
+    offset.y *= 0.5;
+
+    return uv + offset;
   }
 
   /**
@@ -168,36 +235,47 @@ const FRAGMENT_SHADER = /* glsl */ `
     // How much accumulated depth increases per step
     float layerDepth = 1.0 / float(uPomSteps);
 
+    // Apply reduced vertical component for POM offset too
+    vec2 scaledOffset = uOffset;
+    scaledOffset.y *= 0.5;
+
     // UV step per layer — total displacement spread across all steps
-    vec2 deltaUV = uOffset * uStrength / float(uPomSteps);
+    vec2 deltaUV = scaledOffset * uStrength / float(uPomSteps);
 
     // State: current position along the ray
     float currentLayerDepth = 0.0;
     vec2 currentUV = uv;
+
+    // Edge fade applied to overall displacement
+    float fade = edgeFade(uv);
 
     // March through the depth volume
     for (int i = 0; i < MAX_POM_STEPS; i++) {
       // Runtime loop bound (MAX_POM_STEPS is the compile-time max)
       if (i >= uPomSteps) break;
 
-      // Sample the depth map and invert (near=1, far=0 for comparison)
-      float depthAtUV = 1.0 - texture2D(uDepth, currentUV).r;
+      // Sample with blur and contrast curve for consistency with basic mode
+      float rawDepth = sampleDepthSmooth(currentUV);
+      rawDepth = smoothstep(0.05, 0.95, rawDepth);
+      float depthAtUV = 1.0 - rawDepth;
 
       // Has the ray crossed below the depth surface?
       if (currentLayerDepth > depthAtUV) {
         // Step back to previous position for interpolation
         vec2 prevUV = currentUV - deltaUV;
         float prevLayerDepth = currentLayerDepth - layerDepth;
-        float prevDepthAtUV = 1.0 - texture2D(uDepth, prevUV).r;
+        float prevRaw = sampleDepthSmooth(prevUV);
+        prevRaw = smoothstep(0.05, 0.95, prevRaw);
+        float prevDepthAtUV = 1.0 - prevRaw;
 
         // Linear interpolation between the two bracketing samples.
-        // afterDepth = how far the ray overshot at currentUV
-        // beforeDepth = how far the ray was above at prevUV
         float afterDepth = depthAtUV - currentLayerDepth;
         float beforeDepth = prevDepthAtUV - prevLayerDepth;
         float t = afterDepth / (afterDepth - beforeDepth);
 
-        return mix(currentUV, prevUV, t);
+        vec2 hitUV = mix(currentUV, prevUV, t);
+        // Blend toward undisplaced UV near edges
+        return mix(uv, hitUV, fade);
       }
 
       // Advance the ray
@@ -206,7 +284,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     }
 
     // No intersection found — return the final marched position
-    return currentUV;
+    return mix(uv, currentUV, fade);
   }
 
   // ---- Main ----
@@ -364,6 +442,7 @@ export class ParallaxRenderer {
         uStrength: { value: this.config.parallaxStrength },
         uPomEnabled: { value: this.config.pomEnabled },
         uPomSteps: { value: this.config.pomSteps },
+        uDepthTexelSize: { value: new THREE.Vector2(1.0 / depthWidth, 1.0 / depthHeight) },
       },
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
