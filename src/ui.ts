@@ -7,6 +7,16 @@ export class UIController {
   private readonly motionButton: HTMLButtonElement;
   private readonly errorText: HTMLParagraphElement;
 
+  private readonly playbackBar: HTMLDivElement;
+  private readonly playPauseBtn: HTMLButtonElement;
+  private readonly scrubberTrack: HTMLDivElement;
+  private readonly scrubberFill: HTMLDivElement;
+  private readonly scrubberHandle: HTMLDivElement;
+  private readonly timeLabel: HTMLSpanElement;
+  private scrubbing = false;
+  private playbackVideo: HTMLVideoElement | null = null;
+  private playbackRafHandle = 0;
+
   constructor(parent: HTMLElement = document.body) {
     this.overlay = document.createElement('div');
     this.overlay.style.position = 'fixed';
@@ -73,10 +83,82 @@ export class UIController {
     this.errorText.style.textAlign = 'center';
     this.errorText.style.pointerEvents = 'auto';
 
+    // Playback controls bar
+    this.playbackBar = document.createElement('div');
+    this.playbackBar.style.position = 'fixed';
+    this.playbackBar.style.bottom = '0';
+    this.playbackBar.style.left = '0';
+    this.playbackBar.style.right = '0';
+    this.playbackBar.style.display = 'none';
+    this.playbackBar.style.alignItems = 'center';
+    this.playbackBar.style.gap = '12px';
+    this.playbackBar.style.padding = '10px 16px';
+    this.playbackBar.style.background = 'linear-gradient(transparent, rgba(0,0,0,0.7))';
+    this.playbackBar.style.pointerEvents = 'auto';
+    this.playbackBar.style.zIndex = '20';
+
+    this.playPauseBtn = document.createElement('button');
+    this.playPauseBtn.innerHTML = '&#9616;&#9616;'; // pause icon
+    this.playPauseBtn.style.background = 'none';
+    this.playPauseBtn.style.border = 'none';
+    this.playPauseBtn.style.color = '#fff';
+    this.playPauseBtn.style.fontSize = '18px';
+    this.playPauseBtn.style.cursor = 'pointer';
+    this.playPauseBtn.style.padding = '4px 8px';
+    this.playPauseBtn.style.lineHeight = '1';
+    this.playPauseBtn.style.flexShrink = '0';
+
+    this.scrubberTrack = document.createElement('div');
+    this.scrubberTrack.style.flex = '1';
+    this.scrubberTrack.style.height = '6px';
+    this.scrubberTrack.style.borderRadius = '3px';
+    this.scrubberTrack.style.background = 'rgba(255,255,255,0.3)';
+    this.scrubberTrack.style.position = 'relative';
+    this.scrubberTrack.style.cursor = 'pointer';
+
+    this.scrubberFill = document.createElement('div');
+    this.scrubberFill.style.height = '100%';
+    this.scrubberFill.style.borderRadius = '3px';
+    this.scrubberFill.style.background = '#fff';
+    this.scrubberFill.style.width = '0%';
+    this.scrubberFill.style.pointerEvents = 'none';
+
+    this.scrubberHandle = document.createElement('div');
+    this.scrubberHandle.style.position = 'absolute';
+    this.scrubberHandle.style.top = '50%';
+    this.scrubberHandle.style.left = '0%';
+    this.scrubberHandle.style.width = '14px';
+    this.scrubberHandle.style.height = '14px';
+    this.scrubberHandle.style.borderRadius = '50%';
+    this.scrubberHandle.style.background = '#fff';
+    this.scrubberHandle.style.transform = 'translate(-50%, -50%)';
+    this.scrubberHandle.style.pointerEvents = 'none';
+    this.scrubberHandle.style.boxShadow = '0 1px 3px rgba(0,0,0,0.4)';
+
+    this.timeLabel = document.createElement('span');
+    this.timeLabel.textContent = '0:00 / 0:00';
+    this.timeLabel.style.color = '#fff';
+    this.timeLabel.style.fontSize = '13px';
+    this.timeLabel.style.fontVariantNumeric = 'tabular-nums';
+    this.timeLabel.style.flexShrink = '0';
+    this.timeLabel.style.minWidth = '90px';
+    this.timeLabel.style.textAlign = 'right';
+
+    this.scrubberTrack.appendChild(this.scrubberFill);
+    this.scrubberTrack.appendChild(this.scrubberHandle);
+    this.playbackBar.appendChild(this.playPauseBtn);
+    this.playbackBar.appendChild(this.scrubberTrack);
+    this.playbackBar.appendChild(this.timeLabel);
+
+    this.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
+    this.scrubberTrack.addEventListener('mousedown', (e) => this.startScrub(e));
+    this.scrubberTrack.addEventListener('touchstart', (e) => this.startScrubTouch(e), { passive: false });
+
     this.overlay.appendChild(this.loadingPanel);
     this.overlay.appendChild(this.motionButton);
     this.overlay.appendChild(this.errorText);
     parent.appendChild(this.overlay);
+    parent.appendChild(this.playbackBar);
   }
 
   setLoadingProgress(progress: number, label: string): void {
@@ -107,6 +189,98 @@ export class UIController {
     this.errorText.style.display = 'block';
     this.errorText.textContent = message;
   }
+
+  attachPlaybackControls(video: HTMLVideoElement): void {
+    this.playbackVideo = video;
+    this.playbackBar.style.display = 'flex';
+    this.updatePlayPauseIcon();
+
+    video.addEventListener('play', () => this.updatePlayPauseIcon());
+    video.addEventListener('pause', () => this.updatePlayPauseIcon());
+
+    const tick = () => {
+      this.playbackRafHandle = requestAnimationFrame(tick);
+      if (!this.scrubbing) {
+        this.updateScrubberPosition();
+      }
+    };
+    this.playbackRafHandle = requestAnimationFrame(tick);
+  }
+
+  private togglePlayPause(): void {
+    const v = this.playbackVideo;
+    if (!v) return;
+    if (v.paused) {
+      void v.play();
+    } else {
+      v.pause();
+    }
+  }
+
+  private updatePlayPauseIcon(): void {
+    const v = this.playbackVideo;
+    if (!v) return;
+    // U+25B6 play triangle, U+2590U+2590 pause bars
+    this.playPauseBtn.innerHTML = v.paused ? '&#9654;' : '&#9616;&#9616;';
+  }
+
+  private updateScrubberPosition(): void {
+    const v = this.playbackVideo;
+    if (!v || !v.duration) return;
+    const pct = (v.currentTime / v.duration) * 100;
+    this.scrubberFill.style.width = `${pct}%`;
+    this.scrubberHandle.style.left = `${pct}%`;
+    this.timeLabel.textContent = `${formatTime(v.currentTime)} / ${formatTime(v.duration)}`;
+  }
+
+  private startScrub(e: MouseEvent): void {
+    e.preventDefault();
+    this.scrubbing = true;
+    this.seekToClientX(e.clientX);
+
+    const onMove = (ev: MouseEvent) => this.seekToClientX(ev.clientX);
+    const onUp = () => {
+      this.scrubbing = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  private startScrubTouch(e: TouchEvent): void {
+    e.preventDefault();
+    this.scrubbing = true;
+    const touch = e.touches[0];
+    if (touch) this.seekToClientX(touch.clientX);
+
+    const onMove = (ev: TouchEvent) => {
+      const t = ev.touches[0];
+      if (t) this.seekToClientX(t.clientX);
+    };
+    const onEnd = () => {
+      this.scrubbing = false;
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+  }
+
+  private seekToClientX(clientX: number): void {
+    const v = this.playbackVideo;
+    if (!v || !v.duration) return;
+    const rect = this.scrubberTrack.getBoundingClientRect();
+    const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+    v.currentTime = ratio * v.duration;
+    this.updateScrubberPosition();
+  }
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -53,9 +53,13 @@ export function decomposeFrameToLayers(
       const targetOffset = sourceOffset;
 
       if (alpha > 0) {
-        rgba[targetOffset] = sourceRgba[sourceOffset];
-        rgba[targetOffset + 1] = sourceRgba[sourceOffset + 1];
-        rgba[targetOffset + 2] = sourceRgba[sourceOffset + 2];
+        // Premultiply RGB by alpha so the renderer can use
+        // ONE / ONE_MINUS_SRC_ALPHA blending, which avoids dark
+        // halos at semi-transparent layer boundaries.
+        const a = alpha / 255;
+        rgba[targetOffset] = Math.round(sourceRgba[sourceOffset] * a);
+        rgba[targetOffset + 1] = Math.round(sourceRgba[sourceOffset + 1] * a);
+        rgba[targetOffset + 2] = Math.round(sourceRgba[sourceOffset + 2] * a);
       } else {
         rgba[targetOffset] = 0;
         rgba[targetOffset + 1] = 0;
@@ -118,13 +122,32 @@ function normalizeOverlappingAlpha(masks: Uint8Array[], pixelCount: number): voi
       sum += masks[layerIndex][pixelIndex];
     }
 
-    if (sum <= 255 || sum === 0) {
+    if (sum === 0 || sum === 255) {
       continue;
     }
 
+    // Scale alpha values so they sum to exactly 255.  Use floor + remainder
+    // distribution to avoid rounding errors that leave partial transparency
+    // (which bleeds the black clear-color through as dark bands).
     const scale = 255 / sum;
+    let roundedSum = 0;
+    let maxIndex = 0;
+    let maxValue = 0;
+
     for (let layerIndex = 0; layerIndex < masks.length; layerIndex += 1) {
-      masks[layerIndex][pixelIndex] = Math.round(masks[layerIndex][pixelIndex] * scale);
+      const scaled = Math.floor(masks[layerIndex][pixelIndex] * scale);
+      masks[layerIndex][pixelIndex] = scaled;
+      roundedSum += scaled;
+      if (scaled >= maxValue) {
+        maxValue = scaled;
+        maxIndex = layerIndex;
+      }
+    }
+
+    // Assign any remainder to the dominant layer so the total is always 255.
+    const remainder = 255 - roundedSum;
+    if (remainder > 0) {
+      masks[maxIndex][pixelIndex] = Math.min(255, masks[maxIndex][pixelIndex] + remainder);
     }
   }
 }

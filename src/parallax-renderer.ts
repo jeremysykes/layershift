@@ -37,6 +37,9 @@ export class ParallaxRenderer {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 1);
+    // Keep output linear — source textures are already sRGB values stored
+    // in linear-tagged textures, so no additional encoding is needed.
+    this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 
     this.container.appendChild(this.renderer.domElement);
     this.setupResizeHandling();
@@ -63,7 +66,10 @@ export class ParallaxRenderer {
       texture.magFilter = THREE.LinearFilter;
       texture.minFilter = THREE.LinearFilter;
       texture.generateMipmaps = false;
-      texture.colorSpace = THREE.SRGBColorSpace;
+      // Source pixels from canvas getImageData are already sRGB.
+      // Using SRGBColorSpace would double-gamma-correct them, darkening
+      // semi-transparent boundary pixels and creating visible bands.
+      texture.colorSpace = THREE.LinearSRGBColorSpace;
       texture.needsUpdate = true;
 
       const material = new THREE.MeshBasicMaterial({
@@ -71,6 +77,14 @@ export class ParallaxRenderer {
         transparent: true,
         depthWrite: false,
         depthTest: false,
+        // Use premultiplied-alpha blending to avoid dark bands
+        // at semi-transparent layer boundaries. The layer decomposer
+        // pre-multiplies RGB by alpha, so we blend with ONE / ONE_MINUS_SRC_ALPHA.
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+        blendSrcAlpha: THREE.OneFactor,
+        blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
       });
 
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);

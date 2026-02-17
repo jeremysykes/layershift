@@ -93,6 +93,7 @@ async function bootstrap(): Promise<void> {
   await video.play();
 
   ui.hideLoading();
+  ui.attachPlaybackControls(video);
   configureMotionPermissionFlow();
 
   window.addEventListener('beforeunload', () => {
