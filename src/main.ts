@@ -1,7 +1,31 @@
+/**
+ * Application entry point — wires together the depth-aware parallax pipeline.
+ *
+ * ## Boot sequence
+ *
+ * 1. Load the <video> element and precomputed depth data in parallel.
+ * 2. Create a DepthFrameInterpolator to smoothly sample between the
+ *    5fps precomputed depth keyframes at any playback time.
+ * 3. Initialize the ParallaxRenderer with the video element (for
+ *    VideoTexture) and the depth map dimensions.
+ * 4. Start the render loop: each frame, the renderer asks the
+ *    interpolator for the current depth map and the InputHandler
+ *    for the current mouse/gyro offset, then the GPU shader does
+ *    per-pixel UV displacement.
+ * 5. Show playback controls and (on mobile) a motion permission button.
+ *
+ * ## What changed from the old layer-based system
+ *
+ * - No more canvas getImageData / createVideoFrameSampler — the GPU
+ *   samples the video at native resolution via THREE.VideoTexture.
+ * - No more decomposeFrameToLayers — depth is used continuously in
+ *   the fragment shader instead of being quantized into 5 layers.
+ * - The renderer receives a depth callback instead of a layer callback.
+ */
+
 import './style.css';
 import { APP_CONFIG } from './config';
 import { InputHandler } from './input-handler';
-import { decomposeFrameToLayers, type LayerTextureSet } from './layer-decomposer';
 import { ParallaxRenderer } from './parallax-renderer';
 import {
   type BinaryDownloadProgress,
@@ -9,7 +33,11 @@ import {
   loadPrecomputedDepth,
 } from './precomputed-depth';
 import { UIController } from './ui';
-import { createExtractionPlan, createHiddenVideoElement } from './video-source';
+import { createHiddenVideoElement } from './video-source';
+
+// ---------------------------------------------------------------------------
+// Application setup
+// ---------------------------------------------------------------------------
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) {
@@ -18,12 +46,14 @@ if (!app) {
 
 const ui = new UIController(app);
 const input = new InputHandler(APP_CONFIG.motionLerpFactor);
-const renderer = new ParallaxRenderer(
-  app,
-  APP_CONFIG.layerCount,
-  APP_CONFIG.parallaxMaxOffsetPx,
-  APP_CONFIG.overscanPadding
-);
+
+// The renderer now takes a config object instead of individual layer params.
+const renderer = new ParallaxRenderer(app, {
+  parallaxStrength: APP_CONFIG.parallaxStrength,
+  pomEnabled: APP_CONFIG.pomEnabled,
+  pomSteps: APP_CONFIG.pomSteps,
+  overscanPadding: APP_CONFIG.overscanPadding,
+});
 
 void bootstrap().catch((error: unknown) => {
   const message =
@@ -33,8 +63,14 @@ void bootstrap().catch((error: unknown) => {
   ui.setLoadingProgress(0, 'Failed to initialize precomputed depth pipeline.');
 });
 
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
 async function bootstrap(): Promise<void> {
   ui.setLoadingProgress(0.01, 'Loading video metadata and depth data...');
+
+  // Load the video element and binary depth data concurrently.
   const videoPromise = createHiddenVideoElement(APP_CONFIG.videoUrl);
   const depthDataPromise = loadPrecomputedDepth(
     APP_CONFIG.depthDataUrl,
@@ -46,48 +82,28 @@ async function bootstrap(): Promise<void> {
 
   const [video, depthData] = await Promise.all([videoPromise, depthDataPromise]);
 
-  const processingPlan = createExtractionPlan(video, {
-    fps: 1,
-    maxDurationSec: Number.POSITIVE_INFINITY,
-    workingMaxWidth: APP_CONFIG.workingMaxWidth,
-  });
-
-  renderer.initialize(processingPlan.width, processingPlan.height);
-
-  const frameSampler = createVideoFrameSampler(processingPlan.width, processingPlan.height);
+  // The depth interpolator smoothly blends between precomputed 5fps
+  // depth keyframes. We pass the depth map's native dimensions as both
+  // source and target — no bilinear resize needed since the shader
+  // samples the depth texture at whatever resolution it was created.
   const depthInterpolator = new DepthFrameInterpolator(
     depthData,
-    processingPlan.width,
-    processingPlan.height
+    depthData.meta.width,
+    depthData.meta.height
   );
 
-  let generatedFrameIndex = 0;
-  let lastSourceFrameIndex = -1;
-  let lastLayerFrame: LayerTextureSet | null = null;
+  // Initialize the renderer with the video element (for VideoTexture)
+  // and the depth map dimensions (for the depth DataTexture).
+  renderer.initialize(video, depthData.meta.width, depthData.meta.height);
 
-  renderer.start(video, () => {
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      return lastLayerFrame;
-    }
-
-    const sourceFrameIndex = Math.floor(video.currentTime * depthData.meta.sourceFps);
-    if (lastLayerFrame && sourceFrameIndex === lastSourceFrameIndex) {
-      return lastLayerFrame;
-    }
-
-    const frame = frameSampler.capture(video);
-    const depthMap = depthInterpolator.sample(video.currentTime);
-    const layers = decomposeFrameToLayers(frame, depthMap, generatedFrameIndex, video.currentTime, {
-      layerCount: APP_CONFIG.layerCount,
-      featherRadiusPx: APP_CONFIG.layerFeatherRadiusPx,
-    });
-
-    generatedFrameIndex += 1;
-    lastSourceFrameIndex = sourceFrameIndex;
-    lastLayerFrame = layers;
-
-    return layers;
-  }, () => input.update());
+  // Start the render loop. The renderer calls these callbacks each frame:
+  //   readDepth(timeSec) → Float32Array of depth values [0=near, 1=far]
+  //   readInput()        → { x, y } parallax offset in [-1, 1]
+  renderer.start(
+    video,
+    (timeSec: number) => depthInterpolator.sample(timeSec),
+    () => input.update()
+  );
 
   video.currentTime = 0;
   await video.play();
@@ -102,6 +118,10 @@ async function bootstrap(): Promise<void> {
     video.remove();
   });
 }
+
+// ---------------------------------------------------------------------------
+// Motion permission (iOS requires user gesture for DeviceOrientation)
+// ---------------------------------------------------------------------------
 
 function configureMotionPermissionFlow(): void {
   if (!input.isMotionSupported) {
@@ -122,25 +142,9 @@ function configureMotionPermissionFlow(): void {
   });
 }
 
-function createVideoFrameSampler(width: number, height: number): {
-  capture: (video: HTMLVideoElement) => ImageData;
-} {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) {
-    throw new Error('Could not create 2D canvas context for runtime frame sampling.');
-  }
-
-  return {
-    capture: (video) => {
-      ctx.drawImage(video, 0, 0, width, height);
-      return ctx.getImageData(0, 0, width, height);
-    },
-  };
-}
+// ---------------------------------------------------------------------------
+// UI helpers
+// ---------------------------------------------------------------------------
 
 function formatDepthDownloadLabel(progress: BinaryDownloadProgress): string {
   if (progress.totalBytes && progress.totalBytes > 0) {

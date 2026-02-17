@@ -9,6 +9,10 @@ import sharp from 'sharp';
 const exec = promisify(execCallback);
 
 const DEPTH_FPS = 5;
+// Depth Anything v1 Small via Xenova's ONNX export (compatible with
+// @xenova/transformers v2 and onnxruntime-node 1.14).
+// Upgrading to v2 requires migrating to @huggingface/transformers v3
+// which bundles onnxruntime with IR v9+ support.
 const DEPTH_MODEL = 'Xenova/depth-anything-small-hf';
 const OUTPUT_WIDTH = 512;
 const OUTPUT_HEIGHT = 512;
