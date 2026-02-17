@@ -237,6 +237,66 @@
             </tbody>
           </table>
 
+          <!-- Events -->
+          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Events</h3>
+          <p>
+            Listen for lifecycle and frame-level events. All events bubble through the DOM,
+            including Shadow DOM boundaries.
+          </p>
+
+          <table class="config-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Detail</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>depth-parallax:ready</code></td>
+                <td>videoWidth, videoHeight, duration</td>
+                <td>Initialization complete</td>
+              </tr>
+              <tr>
+                <td><code>depth-parallax:play</code></td>
+                <td>currentTime</td>
+                <td>Video starts playing</td>
+              </tr>
+              <tr>
+                <td><code>depth-parallax:pause</code></td>
+                <td>currentTime</td>
+                <td>Video pauses</td>
+              </tr>
+              <tr>
+                <td><code>depth-parallax:loop</code></td>
+                <td>loopCount</td>
+                <td>Video loops back to start</td>
+              </tr>
+              <tr>
+                <td><code>depth-parallax:frame</code></td>
+                <td>currentTime, frameNumber</td>
+                <td>New video frame presented</td>
+              </tr>
+              <tr>
+                <td><code>depth-parallax:error</code></td>
+                <td>message</td>
+                <td>Initialization error</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="code-block"><code><span class="tag">const</span> el = document.querySelector(<span class="string">'depth-parallax'</span>);
+
+el.addEventListener(<span class="string">'depth-parallax:ready'</span>, (e) =&gt; {
+  console.log(<span class="string">`Video: ${e.detail.videoWidth}x${e.detail.videoHeight}`</span>);
+});
+
+el.addEventListener(<span class="string">'depth-parallax:frame'</span>, (e) =&gt; {
+  <span class="comment">// Sync external UI to exact video frames</span>
+  updateTimeline(e.detail.currentTime);
+});</code></div>
+
           <!-- Prepare your video -->
           <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Prepare your video</h3>
           <p>

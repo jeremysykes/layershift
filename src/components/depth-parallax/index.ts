@@ -13,3 +13,12 @@ if (!customElements.get(DepthParallaxElement.TAG_NAME)) {
 
 export { DepthParallaxElement };
 export type { DepthParallaxProps } from './types';
+export type {
+  DepthParallaxEventMap,
+  DepthParallaxReadyDetail,
+  DepthParallaxPlayDetail,
+  DepthParallaxPauseDetail,
+  DepthParallaxLoopDetail,
+  DepthParallaxFrameDetail,
+  DepthParallaxErrorDetail,
+} from './types';

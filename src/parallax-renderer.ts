@@ -376,8 +376,20 @@ export class ParallaxRenderer {
   private readInput: (() => ParallaxInput) | null = null;
   private playbackVideo: HTMLVideoElement | null = null;
 
+  /**
+   * Optional callback invoked on each new video frame (from RVFC).
+   * The Web Component uses this to dispatch the 'depth-parallax:frame' event.
+   */
+  private onVideoFrame: ((currentTime: number, frameNumber: number) => void) | null = null;
+
   // ---- Animation & resize ----
   private animationFrameHandle = 0;
+
+  /** requestVideoFrameCallback handle (0 = inactive). */
+  private rvfcHandle = 0;
+
+  /** Whether RVFC is supported on the current video element. */
+  private rvfcSupported = false;
   private resizeObserver: ResizeObserver | null = null;
   private resizeTimer: number | null = null;
   private currentPlaneWidth = 0;
@@ -502,36 +514,66 @@ export class ParallaxRenderer {
   /**
    * Begin the render loop.
    *
-   * @param readDepth - Called each frame with the current video time.
+   * When `requestVideoFrameCallback` is available, two loops run:
+   * 1. RVFC loop — fires once per new video frame, handles depth update.
+   * 2. RAF loop — fires at display refresh rate, handles input + render.
+   *
+   * When RVFC is not available, falls back to a single RAF loop that
+   * does everything (the pre-RVFC behavior).
+   *
+   * @param readDepth - Called with the current video time.
    *   Returns a Uint8Array of depth values (0=near, 255=far) at the
    *   depth texture's resolution. The interpolator handles caching
    *   so redundant calls (same depth frame) return instantly.
-   * @param readInput - Called each frame. Returns the smoothed
-   *   parallax input {x, y} in [-1, 1].
+   * @param readInput - Returns the smoothed parallax input {x, y}
+   *   in [-1, 1].
+   * @param onVideoFrame - Optional callback invoked on each new
+   *   video frame. Receives the accurate media time and the
+   *   browser's presented-frame counter.
    */
   start(
     video: HTMLVideoElement,
     readDepth: (timeSec: number) => Uint8Array,
-    readInput: () => ParallaxInput
+    readInput: () => ParallaxInput,
+    onVideoFrame?: (currentTime: number, frameNumber: number) => void
   ): void {
     this.stop();
 
     this.playbackVideo = video;
     this.readDepth = readDepth;
     this.readInput = readInput;
+    this.onVideoFrame = onVideoFrame ?? null;
 
+    // Feature-detect RVFC on this specific video element.
+    this.rvfcSupported = ParallaxRenderer.isRVFCSupported();
+
+    // Start the RVFC loop for depth updates (only when supported).
+    if (this.rvfcSupported) {
+      this.rvfcHandle = video.requestVideoFrameCallback(this.videoFrameLoop);
+    }
+
+    // Always start the RAF loop for input + rendering.
     this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
   }
 
-  /** Stop the render loop and release callbacks. */
+  /** Stop both render loops and release callbacks. */
   stop(): void {
     if (this.animationFrameHandle) {
       window.cancelAnimationFrame(this.animationFrameHandle);
       this.animationFrameHandle = 0;
     }
+
+    // Cancel the RVFC loop if active.
+    if (this.rvfcHandle && this.playbackVideo) {
+      this.playbackVideo.cancelVideoFrameCallback(this.rvfcHandle);
+      this.rvfcHandle = 0;
+    }
+
     this.playbackVideo = null;
     this.readDepth = null;
     this.readInput = null;
+    this.onVideoFrame = null;
+    this.rvfcSupported = false;
   }
 
   /** Stop rendering and release all GPU resources. */
@@ -552,16 +594,71 @@ export class ParallaxRenderer {
   }
 
   // -----------------------------------------------------------------------
-  // Render loop
+  // RVFC feature detection
+  // -----------------------------------------------------------------------
+
+  /** Check whether requestVideoFrameCallback is available. */
+  private static isRVFCSupported(): boolean {
+    return 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  }
+
+  // -----------------------------------------------------------------------
+  // Video frame loop (RVFC) — depth updates at video frame rate
   // -----------------------------------------------------------------------
 
   /**
-   * Main render loop — called every animation frame.
+   * RVFC callback — fires only when the browser presents a new video frame.
    *
-   * 1. Copies the interpolated depth into the GPU depth texture.
-   * 2. Updates the parallax offset uniform from input.
-   * 3. THREE.VideoTexture auto-updates the video color.
-   * 4. Renders the scene (single draw call).
+   * Handles the expensive depth texture update, which only needs to happen
+   * when the video frame actually changes (~24-30fps, not 60-120fps).
+   *
+   * Uses `metadata.mediaTime` for more accurate depth reads than
+   * `video.currentTime` (which can lag behind the presented frame).
+   */
+  private readonly videoFrameLoop = (
+    _now: DOMHighResTimeStamp,
+    metadata: VideoFrameCallbackMetadata
+  ) => {
+    const video = this.playbackVideo;
+    if (!video) return;
+
+    // Re-register for the next frame immediately.
+    this.rvfcHandle = video.requestVideoFrameCallback(this.videoFrameLoop);
+
+    // Use mediaTime (accurate to the presented frame) instead of
+    // video.currentTime (which can be stale or ahead).
+    const timeSec = metadata.mediaTime ?? video.currentTime;
+
+    // Update depth texture from the interpolator.
+    if (this.readDepth && this.depthTexture) {
+      const depthData = this.readDepth(timeSec);
+      (this.depthTexture.image.data as Uint8Array).set(depthData);
+      this.depthTexture.needsUpdate = true;
+    }
+
+    // Notify consumer (Web Component uses this for the 'frame' event).
+    if (this.onVideoFrame) {
+      this.onVideoFrame(timeSec, metadata.presentedFrames ?? 0);
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Render loop (RAF) — input + render at display refresh rate
+  // -----------------------------------------------------------------------
+
+  /**
+   * Main render loop — called every animation frame at display refresh rate.
+   *
+   * When RVFC is active, this only handles:
+   * 1. Updating the parallax offset uniform from input (buttery smooth).
+   * 2. Rendering the scene (single draw call).
+   *
+   * The depth texture is updated separately by videoFrameLoop at video
+   * frame rate. This separation means parallax stays smooth at 60/120fps
+   * even though depth only updates at 24-30fps.
+   *
+   * When RVFC is NOT supported, this falls back to the original behavior:
+   * depth update + input update + render all in a single RAF tick.
    */
   private readonly renderLoop = () => {
     this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
@@ -572,19 +669,17 @@ export class ParallaxRenderer {
       return;
     }
 
-    // Update depth texture from the interpolator.
-    // The interpolator returns a cached Uint8Array when the depth frame
-    // hasn't changed (~12 out of every 12 frames at 60fps/5fps depth).
-    // We always copy + flag needsUpdate because the interpolator's
-    // cache check is nearly free, and THREE.js skips the GPU upload
-    // if the data hasn't actually changed.
-    if (this.readDepth && this.depthTexture) {
-      const depthData = this.readDepth(video.currentTime);
-      (this.depthTexture.image.data as Uint8Array).set(depthData);
-      this.depthTexture.needsUpdate = true;
+    // Fallback: when RVFC is not supported, do depth update here
+    // (original behavior — depth reads happen every RAF tick).
+    if (!this.rvfcSupported) {
+      if (this.readDepth && this.depthTexture) {
+        const depthData = this.readDepth(video.currentTime);
+        (this.depthTexture.image.data as Uint8Array).set(depthData);
+        this.depthTexture.needsUpdate = true;
+      }
     }
 
-    // Update the parallax offset from mouse/gyro input.
+    // Update the parallax offset from mouse/gyro input — always at RAF rate.
     // x is negated so that moving the mouse right shifts the image left,
     // revealing content from the right — matching real parallax behavior.
     if (this.readInput && this.mesh) {

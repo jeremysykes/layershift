@@ -21,6 +21,14 @@ import {
 } from '../../precomputed-depth';
 import { ParallaxRenderer } from '../../parallax-renderer';
 import type { ParallaxInput } from '../../input-handler';
+import type {
+  DepthParallaxReadyDetail,
+  DepthParallaxPlayDetail,
+  DepthParallaxPauseDetail,
+  DepthParallaxLoopDetail,
+  DepthParallaxFrameDetail,
+  DepthParallaxErrorDetail,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -152,6 +160,7 @@ export class DepthParallaxElement extends HTMLElement {
   private video: HTMLVideoElement | null = null;
   private initialized = false;
   private abortController: AbortController | null = null;
+  private loopCount = 0;
 
   constructor() {
     super();
@@ -183,6 +192,52 @@ export class DepthParallaxElement extends HTMLElement {
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
   private get shouldMute(): boolean { return this.getAttrBool('muted', DEFAULTS.muted); }
+
+  // --- Event dispatching ---
+
+  /**
+   * Dispatch a namespaced custom event that bubbles through Shadow DOM.
+   * All events use the `depth-parallax:` prefix and are `composed`
+   * so consumers can listen on the host element from the light DOM.
+   */
+  private emit<T>(eventName: string, detail: T): void {
+    this.dispatchEvent(
+      new CustomEvent(eventName, {
+        detail,
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  /**
+   * Attach native video event listeners and re-dispatch them
+   * as namespaced custom events on the host element.
+   */
+  private attachVideoEventListeners(video: HTMLVideoElement): void {
+    video.addEventListener('play', () => {
+      this.emit<DepthParallaxPlayDetail>('depth-parallax:play', {
+        currentTime: video.currentTime,
+      });
+    });
+
+    video.addEventListener('pause', () => {
+      this.emit<DepthParallaxPauseDetail>('depth-parallax:pause', {
+        currentTime: video.currentTime,
+      });
+    });
+
+    video.addEventListener('ended', () => {
+      // The 'ended' event fires on a looping video just before the
+      // browser resets currentTime to 0 and continues playback.
+      if (video.loop) {
+        this.loopCount += 1;
+        this.emit<DepthParallaxLoopDetail>('depth-parallax:loop', {
+          loopCount: this.loopCount,
+        });
+      }
+    });
+  }
 
   // --- Lifecycle ---
 
@@ -246,7 +301,9 @@ export class DepthParallaxElement extends HTMLElement {
     const depthMeta = this.getAttribute('depth-meta');
 
     if (!src || !depthSrc || !depthMeta) {
-      console.warn('<depth-parallax>: src, depth-src, and depth-meta attributes are required.');
+      const message = 'src, depth-src, and depth-meta attributes are required.';
+      console.warn(`<depth-parallax>: ${message}`);
+      this.emit<DepthParallaxErrorDetail>('depth-parallax:error', { message });
       return;
     }
 
@@ -268,6 +325,8 @@ export class DepthParallaxElement extends HTMLElement {
       }
 
       this.video = video;
+      this.loopCount = 0;
+      this.attachVideoEventListeners(video);
 
       // Compute parallax strength from pixel-based attributes.
       // parallaxMax is the max pixel offset for nearest objects.
@@ -307,6 +366,13 @@ export class DepthParallaxElement extends HTMLElement {
             x: raw.x * pxFactor,
             y: raw.y * pyFactor,
           };
+        },
+        // RVFC callback: dispatch 'frame' event on each new video frame
+        (currentTime: number, frameNumber: number) => {
+          this.emit<DepthParallaxFrameDetail>('depth-parallax:frame', {
+            currentTime,
+            frameNumber,
+          });
         }
       );
 
@@ -321,8 +387,16 @@ export class DepthParallaxElement extends HTMLElement {
       }
 
       this.initialized = true;
+
+      this.emit<DepthParallaxReadyDetail>('depth-parallax:ready', {
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        duration: video.duration,
+      });
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to initialize.';
       console.error('<depth-parallax>: Failed to initialize.', err);
+      this.emit<DepthParallaxErrorDetail>('depth-parallax:error', { message });
     }
   }
 
@@ -386,6 +460,7 @@ export class DepthParallaxElement extends HTMLElement {
     }
 
     this.initialized = false;
+    this.loopCount = 0;
     this.container = null;
   }
 }
