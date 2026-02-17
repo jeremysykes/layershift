@@ -135,6 +135,7 @@ async function computeDepthFrame(
     },
   })
     .resize(OUTPUT_WIDTH, OUTPUT_HEIGHT, { fit: 'fill', kernel: sharp.kernel.bilinear })
+    .blur(1.5) // Gentle Gaussian pre-filter to reduce depth estimation noise
     .toColourspace('b-w')
     .raw()
     .toBuffer();

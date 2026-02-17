@@ -20,7 +20,23 @@ export class InputHandler {
   }
 
   get isMotionSupported(): boolean {
-    return typeof DeviceOrientationEvent !== 'undefined';
+    // DeviceOrientationEvent must exist for gyroscope-based parallax.
+    if (typeof DeviceOrientationEvent === 'undefined') {
+      return false;
+    }
+
+    // On desktop browsers, DeviceOrientationEvent is defined but no
+    // gyroscope hardware exists. Use touch capability + coarse pointer
+    // as a proxy for "this is a phone or tablet with a gyroscope".
+    // Requiring both avoids false positives on touchscreen laptops
+    // (which have touch but primary pointer is fine/mouse).
+    const hasTouch =
+      'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const hasCoarsePointer =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches;
+
+    return hasTouch && hasCoarsePointer;
   }
 
   get isMotionEnabled(): boolean {

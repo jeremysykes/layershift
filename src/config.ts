@@ -54,7 +54,7 @@ export const APP_CONFIG = {
    *
    * Costs `pomSteps` additional texture lookups per fragment.
    */
-  pomEnabled: false,
+  pomEnabled: true,
 
   /**
    * Number of ray-march steps for POM. More steps = smoother intersection

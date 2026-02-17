@@ -12,7 +12,8 @@
  *    interpolator for the current depth map and the InputHandler
  *    for the current mouse/gyro offset, then the GPU shader does
  *    per-pixel UV displacement.
- * 5. Show playback controls and (on mobile) a motion permission button.
+ * 5. Register spacebar for play/pause and (on mobile) show a motion
+ *    permission button.
  *
  * ## What changed from the old layer-based system
  *
@@ -97,7 +98,7 @@ async function bootstrap(): Promise<void> {
   renderer.initialize(video, depthData.meta.width, depthData.meta.height);
 
   // Start the render loop. The renderer calls these callbacks each frame:
-  //   readDepth(timeSec) → Float32Array of depth values [0=near, 1=far]
+  //   readDepth(timeSec) → Uint8Array of depth values [0=near, 255=far]
   //   readInput()        → { x, y } parallax offset in [-1, 1]
   renderer.start(
     video,
@@ -106,16 +107,31 @@ async function bootstrap(): Promise<void> {
   );
 
   video.currentTime = 0;
-  await video.play();
 
   ui.hideLoading();
-  ui.attachPlaybackControls(video);
+  configureSpacebarToggle(video);
   configureMotionPermissionFlow();
 
   window.addEventListener('beforeunload', () => {
     renderer.dispose();
     input.dispose();
     video.remove();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Spacebar play/pause
+// ---------------------------------------------------------------------------
+
+function configureSpacebarToggle(video: HTMLVideoElement): void {
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space') return;
+    e.preventDefault();
+    if (video.paused) {
+      void video.play();
+    } else {
+      video.pause();
+    }
   });
 }
 
