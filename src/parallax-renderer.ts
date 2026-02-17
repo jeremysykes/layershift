@@ -2,65 +2,22 @@ import * as THREE from 'three';
 import type { ParallaxInput } from './input-handler';
 import type { LayerTextureSet } from './layer-decomposer';
 
-class LayerFrameRingBuffer {
-  private readonly entries = new Map<number, LayerTextureSet>();
-
-  constructor(readonly capacity: number) {}
-
-  clear(): void {
-    this.entries.clear();
-  }
-
-  get(index: number): LayerTextureSet | undefined {
-    return this.entries.get(index);
-  }
-
-  set(index: number, frame: LayerTextureSet): void {
-    if (this.entries.has(index)) {
-      return;
-    }
-
-    this.entries.set(index, frame);
-    if (this.entries.size <= this.capacity) {
-      return;
-    }
-
-    const oldestKey = this.entries.keys().next().value as number | undefined;
-    if (oldestKey !== undefined) {
-      this.entries.delete(oldestKey);
-    }
-  }
-
-  pruneOutside(minInclusive: number, maxInclusive: number): void {
-    for (const key of this.entries.keys()) {
-      if (key < minInclusive || key > maxInclusive) {
-        this.entries.delete(key);
-      }
-    }
-  }
-}
-
 export class ParallaxRenderer {
   private static readonly RESIZE_DEBOUNCE_MS = 100;
-  private static readonly OVERSCAN_MULTIPLIER = 1.15;
 
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
   private readonly renderer: THREE.WebGLRenderer;
-  private readonly frameCache: LayerFrameRingBuffer;
   private readonly container: HTMLElement;
   private textures: THREE.DataTexture[] = [];
   private meshes: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
   private frameWidth = 1;
   private frameHeight = 1;
-  private frameSets: LayerTextureSet[] = [];
   private playbackVideo: HTMLVideoElement | null = null;
+  private readLayerFrame: (() => LayerTextureSet | null) | null = null;
   private readParallaxInput: (() => ParallaxInput) | null = null;
   private animationFrameHandle = 0;
   private activeFrameIndex = -1;
-  private fps = 12;
-  private lagFrames = 0;
-  private lastTimeSec = 0;
   private resizeObserver: ResizeObserver | null = null;
   private resizeTimer: number | null = null;
   private currentPlaneWidth = 1;
@@ -70,10 +27,9 @@ export class ParallaxRenderer {
     parent: HTMLElement,
     private readonly layerCount: number,
     private readonly maxOffsetPx: number,
-    ringBufferSize: number
+    private readonly overscanPadding: number
   ) {
     this.container = parent;
-    this.frameCache = new LayerFrameRingBuffer(ringBufferSize);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -131,21 +87,15 @@ export class ParallaxRenderer {
 
   start(
     video: HTMLVideoElement,
-    frameSets: LayerTextureSet[],
-    fps: number,
-    lagFrames: number,
+    readLayerFrame: () => LayerTextureSet | null,
     readParallaxInput: () => ParallaxInput
   ): void {
     this.stop();
 
     this.playbackVideo = video;
-    this.frameSets = frameSets;
-    this.fps = fps;
-    this.lagFrames = lagFrames;
+    this.readLayerFrame = readLayerFrame;
     this.readParallaxInput = readParallaxInput;
     this.activeFrameIndex = -1;
-    this.lastTimeSec = 0;
-    this.frameCache.clear();
 
     this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
   }
@@ -155,6 +105,9 @@ export class ParallaxRenderer {
       window.cancelAnimationFrame(this.animationFrameHandle);
       this.animationFrameHandle = 0;
     }
+    this.playbackVideo = null;
+    this.readLayerFrame = null;
+    this.readParallaxInput = null;
   }
 
   dispose(): void {
@@ -175,18 +128,15 @@ export class ParallaxRenderer {
   private readonly renderLoop = () => {
     this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
 
-    if (!this.playbackVideo || this.frameSets.length === 0) {
+    if (!this.playbackVideo) {
       this.renderer.render(this.scene, this.camera);
       return;
     }
 
-    const targetIndex = this.resolveFrameIndex(this.playbackVideo.currentTime);
-    this.ensureBufferedWindow(targetIndex);
-
-    const frame = this.frameCache.get(targetIndex) ?? this.frameSets[targetIndex];
-    if (frame && targetIndex !== this.activeFrameIndex) {
+    const frame = this.readLayerFrame?.() ?? null;
+    if (frame && frame.index !== this.activeFrameIndex) {
       this.applyFrame(frame);
-      this.activeFrameIndex = targetIndex;
+      this.activeFrameIndex = frame.index;
     }
 
     if (this.readParallaxInput) {
@@ -195,31 +145,6 @@ export class ParallaxRenderer {
 
     this.renderer.render(this.scene, this.camera);
   };
-
-  private resolveFrameIndex(timeSec: number): number {
-    if (this.frameSets.length === 0) {
-      return 0;
-    }
-
-    if (timeSec < this.lastTimeSec) {
-      this.activeFrameIndex = -1;
-      this.frameCache.clear();
-    }
-    this.lastTimeSec = timeSec;
-
-    const delayedFrame = Math.floor(timeSec * this.fps) - this.lagFrames;
-    return clamp(delayedFrame, 0, this.frameSets.length - 1);
-  }
-
-  private ensureBufferedWindow(startIndex: number): void {
-    const endIndex = clamp(startIndex + (this.frameCache.capacity - 1), 0, this.frameSets.length - 1);
-
-    for (let index = startIndex; index <= endIndex; index += 1) {
-      this.frameCache.set(index, this.frameSets[index]);
-    }
-
-    this.frameCache.pruneOutside(startIndex, endIndex);
-  }
 
   private applyFrame(frame: LayerTextureSet): void {
     for (let layerIndex = 0; layerIndex < this.layerCount; layerIndex += 1) {
@@ -318,10 +243,14 @@ export class ParallaxRenderer {
       coverWidth = viewportHeight * sourceAspect;
     }
 
-    const overscan = this.maxOffsetPx * ParallaxRenderer.OVERSCAN_MULTIPLIER;
+    const horizontalOverscanPerSide =
+      viewportWidth * (this.maxOffsetPx / viewportWidth + this.overscanPadding);
+    const verticalOverscanPerSide =
+      viewportHeight * (this.maxOffsetPx / viewportHeight + this.overscanPadding);
+
     return {
-      planeWidth: coverWidth + overscan * 2,
-      planeHeight: coverHeight + overscan * 2,
+      planeWidth: coverWidth + horizontalOverscanPerSide * 2,
+      planeHeight: coverHeight + verticalOverscanPerSide * 2,
     };
   }
 
@@ -339,8 +268,4 @@ export class ParallaxRenderer {
     this.meshes = [];
     this.textures = [];
   }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
