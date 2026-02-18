@@ -7,16 +7,26 @@ type IOSDeviceOrientationEvent = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<'granted' | 'denied'>;
 };
 
+/** Pixels of finger drag to reach full parallax offset (-1 or 1). */
+const TOUCH_DRAG_RANGE = 100;
+
 export class InputHandler {
   private pointerTarget: ParallaxInput = { x: 0, y: 0 };
   private motionTarget: ParallaxInput = { x: 0, y: 0 };
   private smoothedOutput: ParallaxInput = { x: 0, y: 0 };
   private usingMotionInput = false;
   private motionListenerAttached = false;
+  private touchActive = false;
+  private touchAnchorX = 0;
+  private touchAnchorY = 0;
 
   constructor(private readonly motionLerpFactor: number) {
     window.addEventListener('mousemove', this.handleMouseMove);
     window.addEventListener('mouseleave', this.resetPointerTarget);
+    window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', this.handleTouchMove, { passive: true });
+    window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', this.handleTouchEnd, { passive: true });
   }
 
   get isMotionSupported(): boolean {
@@ -66,7 +76,12 @@ export class InputHandler {
   }
 
   update(): ParallaxInput {
-    const target = this.usingMotionInput ? this.motionTarget : this.pointerTarget;
+    // Priority: touch (finger on screen) > gyro > mouse
+    const target = this.touchActive
+      ? this.pointerTarget
+      : this.usingMotionInput
+        ? this.motionTarget
+        : this.pointerTarget;
     this.smoothedOutput.x = lerp(
       this.smoothedOutput.x,
       target.x,
@@ -84,6 +99,10 @@ export class InputHandler {
   dispose(): void {
     window.removeEventListener('mousemove', this.handleMouseMove);
     window.removeEventListener('mouseleave', this.resetPointerTarget);
+    window.removeEventListener('touchstart', this.handleTouchStart);
+    window.removeEventListener('touchmove', this.handleTouchMove);
+    window.removeEventListener('touchend', this.handleTouchEnd);
+    window.removeEventListener('touchcancel', this.handleTouchEnd);
     if (this.motionListenerAttached) {
       window.removeEventListener('deviceorientation', this.handleDeviceOrientation);
       this.motionListenerAttached = false;
@@ -98,6 +117,31 @@ export class InputHandler {
   };
 
   private readonly resetPointerTarget = () => {
+    this.pointerTarget.x = 0;
+    this.pointerTarget.y = 0;
+  };
+
+  private readonly handleTouchStart = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    this.touchActive = true;
+    this.touchAnchorX = touch.clientX;
+    this.touchAnchorY = touch.clientY;
+    this.pointerTarget.x = 0;
+    this.pointerTarget.y = 0;
+  };
+
+  private readonly handleTouchMove = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - this.touchAnchorX;
+    const dy = touch.clientY - this.touchAnchorY;
+    this.pointerTarget.x = clamp(dx / TOUCH_DRAG_RANGE, -1, 1);
+    this.pointerTarget.y = clamp(dy / TOUCH_DRAG_RANGE, -1, 1);
+  };
+
+  private readonly handleTouchEnd = () => {
+    this.touchActive = false;
     this.pointerTarget.x = 0;
     this.pointerTarget.y = 0;
   };
