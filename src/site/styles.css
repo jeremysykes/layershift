@@ -91,9 +91,9 @@ a:hover {
 }
 
 @keyframes bounce {
-  0%, 20%, 50%, 80%, 100% { transform: rotate(-45deg) translateY(0); }
-  40% { transform: rotate(-45deg) translateY(6px); }
-  60% { transform: rotate(-45deg) translateY(3px); }
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0) rotate(-45deg); }
+  40% { transform: translateY(6px) rotate(-45deg); }
+  60% { transform: translateY(3px) rotate(-45deg); }
 }
 
 /* ------------------------------------------------------------------ */
