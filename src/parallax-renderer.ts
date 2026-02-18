@@ -58,11 +58,15 @@ const VERTEX_SHADER = /* glsl */ `#version 300 es
   uniform vec2 uUvScale;
 
   out vec2 vUv;
+  out vec2 vScreenUv;
 
   void main() {
     // Map from clip space [-1,1] to [0,1], then apply cover-fit transform
     vec2 baseUv = aPosition * 0.5 + 0.5;
     vUv = baseUv * uUvScale + uUvOffset;
+    // Screen-space UV always [0,1] — used for vignette and edge fade
+    // which should operate on screen position, not texture coordinates.
+    vScreenUv = baseUv;
     gl_Position = vec4(aPosition, 0.0, 1.0);
   }
 `;
@@ -153,8 +157,11 @@ const FRAGMENT_SHADER = /* glsl */ `#version 300 es
 
   // ---- Varyings ----
 
-  /** Interpolated texture coordinates from vertex shader. */
+  /** Interpolated texture coordinates from vertex shader (cover-fit transformed). */
   in vec2 vUv;
+
+  /** Screen-space UV [0,1] — always covers the full viewport. */
+  in vec2 vScreenUv;
 
   /** Fragment output color. */
   out vec4 fragColor;
@@ -259,8 +266,8 @@ const FRAGMENT_SHADER = /* glsl */ `#version 300 es
     ) * 0.25;
     color = mix(color, blurred, dof);
 
-    // Vignette
-    color.rgb *= vignette(vUv);
+    // Vignette (screen-space, not texture-space)
+    color.rgb *= vignette(vScreenUv);
 
     fragColor = color;
   }
@@ -760,16 +767,23 @@ export class ParallaxRenderer {
     }
 
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      gl.clear(gl.COLOR_BUFFER_BIT);
+      // Skip this frame — keep the previous frame on screen.
+      // This avoids a flash to black during video loop transitions
+      // where readyState briefly drops.
       return;
     }
 
     gl.useProgram(this.program);
 
     // Upload the current video frame to the GPU.
+    // Flip Y: HTMLVideoElement pixel data is top-to-bottom, but WebGL
+    // textures load bottom-to-top. Three.js VideoTexture handled this
+    // automatically; with raw WebGL we must set it explicitly.
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
     // Fallback: when RVFC is not supported, do depth update here.
     if (!this.rvfcSupported) {
@@ -867,6 +881,10 @@ export class ParallaxRenderer {
     // Compute cover-fit UV transform.
     // The video fills the viewport (cover-fit), and overscan adds extra
     // visible area so parallax displacement doesn't reveal edges.
+    //
+    // In UV space, scale < 1 means we sample a SUBSET of the texture
+    // (zooming in / cropping). For cover-fit, the limiting axis maps 1:1
+    // and the overflowing axis is cropped (scale < 1).
     const viewportAspect = width / height;
     const extra = this.config.parallaxStrength + this.config.overscanPadding;
 
@@ -874,17 +892,18 @@ export class ParallaxRenderer {
     let scaleV = 1.0;
 
     if (viewportAspect > this.videoAspect) {
-      // Viewport is wider — video height overflows, crop top/bottom
-      scaleV = viewportAspect / this.videoAspect;
+      // Viewport is wider — match width, crop top/bottom
+      scaleV = this.videoAspect / viewportAspect;
     } else {
-      // Viewport is taller — video width overflows, crop left/right
-      scaleU = this.videoAspect / viewportAspect;
+      // Viewport is taller — match height, crop left/right
+      scaleU = viewportAspect / this.videoAspect;
     }
 
-    // Apply overscan: zoom in slightly so the edges have extra content
+    // Apply overscan: zoom in further so parallax displacement doesn't
+    // reveal texture edges. Dividing reduces the UV range (more zoom).
     const overscanScale = 1.0 + extra * 2;
-    scaleU *= overscanScale;
-    scaleV *= overscanScale;
+    scaleU /= overscanScale;
+    scaleV /= overscanScale;
 
     // Center the UV mapping: offset = (1 - scale) / 2
     this.uvOffset = [(1.0 - scaleU) / 2.0, (1.0 - scaleV) / 2.0];
