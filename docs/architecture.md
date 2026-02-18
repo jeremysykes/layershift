@@ -61,7 +61,7 @@ See `docs/diagrams/parallax-initialization.md` for the full sequence diagram.
 3. **Parameter derivation** (sync, O(1)): continuous functions mapping depth statistics to shader parameters
 4. **Config merge**: explicit > derived > calibrated defaults
 5. **Depth interpolator**: Web Worker preferred, main-thread fallback
-6. **Renderer setup**: Three.js scene, shader material, uniforms set once
+6. **Renderer setup**: WebGL 2 program, textures, uniforms set once
 7. **Render loop start**: RAF + RVFC registration
 
 ### Render Loop
@@ -76,8 +76,8 @@ Two decoupled loops:
 
 | Uniform | Source | Updated |
 |---------|--------|---------|
-| uVideo | VideoTexture | Auto (GPU) |
-| uDepth | DataTexture | Per depth frame (~5fps) |
+| uImage | Video texture (WebGL 2) | Per RAF frame |
+| uDepth | Depth texture (R8) | Per depth frame (~5fps) |
 | uOffset | InputHandler | Per RAF frame |
 | uStrength | Config | Once at init |
 | uPomEnabled | Config | Once at init |
@@ -106,7 +106,7 @@ See `docs/diagrams/depth-parameter-derivation.md` for the data flow and preceden
 
 ### Element: `<layershift-parallax>`
 
-Shadow DOM encapsulates a `<canvas>` (Three.js) and hidden `<video>`.
+Shadow DOM encapsulates a `<canvas>` (WebGL 2) and hidden `<video>`.
 
 **Observed attributes:**
 - `src`, `depth-src`, `depth-meta` (required asset paths)
@@ -164,7 +164,7 @@ See `docs/diagrams/build-system.md` for the build flow diagram.
 |---------|--------|-------------|
 | `npm run dev` | Dev server :5173 | Vite dev server with HMR |
 | `npm run build` | `dist/` | Landing page build (TypeScript + Vite) |
-| `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle (Three.js + Worker inlined) |
+| `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle (Worker inlined) |
 | `npm run precompute` | depth-data.bin + depth-meta.json | Generate depth maps from video |
 | `npm run package` | `output/` | Bundle component + video + depth for deployment |
 | `npm run test` | — | Vitest unit tests |

@@ -120,8 +120,8 @@ async function bootstrap(): Promise<void> {
     readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
   }
 
-  // Initialize the renderer with the video element (for VideoTexture)
-  // and the depth map dimensions (for the depth DataTexture).
+  // Initialize the renderer with the video element (for video texture)
+  // and the depth map dimensions (for the depth texture).
   renderer.initialize(video, depthData.meta.width, depthData.meta.height);
 
   // Start the render loop. The renderer calls these callbacks each frame:

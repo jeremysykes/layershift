@@ -30,7 +30,7 @@ export const APP_CONFIG = {
   /**
    * Maximum width for depth processing. The precomputed depth maps are
    * generated at this resolution. Does not affect the color video resolution,
-   * which is sampled at native display resolution via VideoTexture.
+   * which is sampled at native display resolution via the video texture.
    */
   workingMaxWidth: 512,
 
