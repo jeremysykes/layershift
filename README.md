@@ -191,4 +191,6 @@ Future effects under the Layershift umbrella:
 
 ## License
 
-MIT
+Business Source License 1.1 — see [LICENSE](./LICENSE) for details.
+
+Change date: 2029-01-01 → Apache License 2.0
