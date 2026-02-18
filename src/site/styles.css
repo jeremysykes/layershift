@@ -56,6 +56,33 @@ a:hover {
   height: 100%;
 }
 
+/* ---- Wordmark ---- */
+
+#hero-wordmark {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 3;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 1s ease 0.5s;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+
+#hero-wordmark.visible {
+  opacity: 1;
+}
+
+#hero-wordmark .wordmark-dot {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---- Scroll hint ---- */
+
 #hero-scroll-hint {
   position: fixed;
   bottom: 2rem;

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "fashion-rain",
+    "src": "/videos/fashion-rain/video.mp4",
+    "depthSrc": "/videos/fashion-rain/depth-data.bin",
+    "depthMeta": "/videos/fashion-rain/depth-meta.json"
+  },
+  {
+    "id": "sneaker-drop",
+    "src": "/videos/sneaker-drop/video.mp4",
+    "depthSrc": "/videos/sneaker-drop/depth-data.bin",
+    "depthMeta": "/videos/sneaker-drop/depth-meta.json"
+  }
+]

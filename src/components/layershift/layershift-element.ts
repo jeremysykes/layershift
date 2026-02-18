@@ -253,10 +253,15 @@ export class LayershiftElement extends HTMLElement {
   }
 
   attributeChangedCallback(_name: string, _oldVal: string | null, _newVal: string | null): void {
-    // If already initialized and a source attribute changed, re-initialize
-    if (this.initialized && ['src', 'depth-src', 'depth-meta'].includes(_name)) {
+    if (!['src', 'depth-src', 'depth-meta'].includes(_name)) return;
+
+    if (this.initialized) {
+      // Re-initialize with new source attributes
       this.dispose();
       this.setupShadowDOM();
+      void this.init();
+    } else if (this.isConnected && this.getAttribute('src') && this.getAttribute('depth-src') && this.getAttribute('depth-meta')) {
+      // First init deferred until all required attributes are set
       void this.init();
     }
   }

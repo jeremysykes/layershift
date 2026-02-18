@@ -6,7 +6,7 @@
  * that can be deployed or shared.
  *
  * Usage:
- *   npx tsx scripts/package-output.ts [output-dir]
+ *   npx tsx scripts/package-output.ts [video-dir] [output-dir]
  *
  * Output directory structure:
  *   output/
@@ -21,8 +21,8 @@
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const outputDir = resolve(process.argv[2] ?? './output');
-const publicDir = resolve('./public');
+const videoDir = resolve(process.argv[2] ?? './public/videos/fashion-rain');
+const outputDir = resolve(process.argv[3] ?? './output');
 const componentPath = resolve('./dist/components/layershift.js');
 
 async function main(): Promise<void> {
@@ -30,9 +30,9 @@ async function main(): Promise<void> {
 
   // Copy assets
   await Promise.all([
-    copyFile(resolve(publicDir, 'sample.mp4'), resolve(outputDir, 'video.mp4')),
-    copyFile(resolve(publicDir, 'depth-data.bin'), resolve(outputDir, 'depth-data.bin')),
-    copyFile(resolve(publicDir, 'depth-meta.json'), resolve(outputDir, 'depth-meta.json')),
+    copyFile(resolve(videoDir, 'video.mp4'), resolve(outputDir, 'video.mp4')),
+    copyFile(resolve(videoDir, 'depth-data.bin'), resolve(outputDir, 'depth-data.bin')),
+    copyFile(resolve(videoDir, 'depth-meta.json'), resolve(outputDir, 'depth-meta.json')),
     copyFile(componentPath, resolve(outputDir, 'layershift.js')),
   ]);
 

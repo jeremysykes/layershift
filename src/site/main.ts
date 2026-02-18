@@ -3,10 +3,41 @@
  *
  * Registers the <layershift-parallax> Web Component and sets up scroll
  * interactions (hero fade, section reveal, framework tabs).
+ * Randomly selects a demo video from the manifest on each page load.
  */
 
 import '../components/layershift/index';
 import './styles.css';
+
+// ---------------------------------------------------------------------------
+// Video manifest: random selection
+// ---------------------------------------------------------------------------
+
+interface VideoEntry {
+  id: string;
+  src: string;
+  depthSrc: string;
+  depthMeta: string;
+}
+
+async function setupRandomVideo(): Promise<void> {
+  try {
+    const res = await fetch('/videos/manifest.json');
+    const videos: VideoEntry[] = await res.json();
+    if (!videos.length) return;
+
+    const pick = videos[Math.floor(Math.random() * videos.length)];
+
+    const elements = document.querySelectorAll<HTMLElement>('layershift-parallax');
+    elements.forEach((el) => {
+      el.setAttribute('src', pick.src);
+      el.setAttribute('depth-src', pick.depthSrc);
+      el.setAttribute('depth-meta', pick.depthMeta);
+    });
+  } catch (err) {
+    console.warn('Failed to load video manifest, using defaults', err);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Scroll: hero fade + parallax on scroll
@@ -15,13 +46,15 @@ import './styles.css';
 function setupHeroScroll(): void {
   const hero = document.getElementById('hero');
   const heroContent = document.getElementById('hero-scroll-hint');
+  const wordmark = document.getElementById('hero-wordmark');
   if (!hero) return;
 
-  // Show scroll hint after 3s
+  // Show scroll hint and wordmark after a brief delay
   if (heroContent) {
-    setTimeout(() => {
-      heroContent.classList.add('visible');
-    }, 3000);
+    setTimeout(() => heroContent.classList.add('visible'), 3000);
+  }
+  if (wordmark) {
+    setTimeout(() => wordmark.classList.add('visible'), 300);
   }
 
   let ticking = false;
@@ -39,10 +72,9 @@ function setupHeroScroll(): void {
       hero.style.opacity = String(opacity);
       hero.style.transform = `scale(${scale})`;
 
-      // Hide scroll hint on any scroll
-      if (heroContent && progress > 0.05) {
-        heroContent.classList.remove('visible');
-      }
+      // Fade wordmark and scroll hint with the hero
+      if (wordmark) wordmark.style.opacity = String(Math.max(1 - progress * 2, 0));
+      if (heroContent) heroContent.style.opacity = String(Math.max(1 - progress * 2, 0));
 
       ticking = false;
     });
@@ -100,6 +132,7 @@ function setupFrameworkTabs(): void {
 // Init
 // ---------------------------------------------------------------------------
 
+setupRandomVideo();
 setupHeroScroll();
 setupSectionReveal();
 setupFrameworkTabs();

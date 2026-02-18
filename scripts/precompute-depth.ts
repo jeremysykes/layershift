@@ -41,11 +41,11 @@ async function main(): Promise<void> {
   await ensureFfmpegAvailable();
 
   const inputVideoPath = resolve(process.argv[2] ?? './public/sample.mp4');
-  const publicDir = resolve('./public');
-  const depthDataPath = resolve('./public/depth-data.bin');
-  const depthMetaPath = resolve('./public/depth-meta.json');
+  const outputDir = resolve(process.argv[3] ?? './public');
+  const depthDataPath = join(outputDir, 'depth-data.bin');
+  const depthMetaPath = join(outputDir, 'depth-meta.json');
 
-  await mkdir(publicDir, { recursive: true });
+  await mkdir(outputDir, { recursive: true });
 
   const sourceFps = await readSourceFps(inputVideoPath);
   const tempDir = await mkdtemp(join(tmpdir(), 'depth-precompute-'));

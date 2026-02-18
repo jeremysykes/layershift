@@ -19,13 +19,13 @@
  */
 export const APP_CONFIG = {
   /** Path to the source video served from /public. */
-  videoUrl: '/sample.mp4',
+  videoUrl: '/videos/fashion-rain/video.mp4',
 
   /** Path to the packed binary depth data (4-byte header + Uint8 frames). */
-  depthDataUrl: '/depth-data.bin',
+  depthDataUrl: '/videos/fashion-rain/depth-data.bin',
 
   /** Path to the JSON metadata describing the depth data layout. */
-  depthMetaUrl: '/depth-meta.json',
+  depthMetaUrl: '/videos/fashion-rain/depth-meta.json',
 
   /**
    * Maximum width for depth processing. The precomputed depth maps are
