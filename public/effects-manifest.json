@@ -1,0 +1,15 @@
+{
+  "defaultEffect": "parallax",
+  "effects": [
+    {
+      "id": "parallax",
+      "label": "Depth Parallax",
+      "enabled": true
+    },
+    {
+      "id": "tilt-shift",
+      "label": "Tilt Shift",
+      "enabled": false
+    }
+  ]
+}
