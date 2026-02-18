@@ -16,5 +16,29 @@
     "src": "/videos/luxury-perfume/video.mp4",
     "depthSrc": "/videos/luxury-perfume/depth-data.bin",
     "depthMeta": "/videos/luxury-perfume/depth-meta.json"
+  },
+  {
+    "id": "canyon-car",
+    "src": "/videos/canyon-car/video.mp4",
+    "depthSrc": "/videos/canyon-car/depth-data.bin",
+    "depthMeta": "/videos/canyon-car/depth-meta.json"
+  },
+  {
+    "id": "modern-interior",
+    "src": "/videos/modern-interior/video.mp4",
+    "depthSrc": "/videos/modern-interior/depth-data.bin",
+    "depthMeta": "/videos/modern-interior/depth-meta.json"
+  },
+  {
+    "id": "whiskey-glass",
+    "src": "/videos/whiskey-glass/video.mp4",
+    "depthSrc": "/videos/whiskey-glass/depth-data.bin",
+    "depthMeta": "/videos/whiskey-glass/depth-meta.json"
+  },
+  {
+    "id": "tech-product",
+    "src": "/videos/tech-product/video.mp4",
+    "depthSrc": "/videos/tech-product/depth-data.bin",
+    "depthMeta": "/videos/tech-product/depth-meta.json"
   }
 ]
