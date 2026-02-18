@@ -57,8 +57,14 @@ class ComponentInputHandler {
   private usingMotionInput = false;
   private motionListenerAttached = false;
   private motionRequested = false;
+  private touchActive = false;
+  private touchAnchorX = 0;
+  private touchAnchorY = 0;
   private readonly lerpFactor: number;
   private readonly motionLerpFactor: number;
+
+  /** Pixels of finger drag to reach full parallax offset (-1 or 1). */
+  private static readonly TOUCH_DRAG_RANGE = 100;
 
   constructor(
     private readonly host: HTMLElement,
@@ -69,12 +75,22 @@ class ComponentInputHandler {
     this.motionLerpFactor = motionLerpFactor;
     this.host.addEventListener('mousemove', this.handleMouseMove);
     this.host.addEventListener('mouseleave', this.resetPointerTarget);
-    this.host.addEventListener('touchstart', this.handleFirstTouch, { once: true });
+    this.host.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    this.host.addEventListener('touchmove', this.handleTouchMove, { passive: true });
+    this.host.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+    this.host.addEventListener('touchcancel', this.handleTouchEnd, { passive: true });
   }
 
   update(): ParallaxInput {
-    const target = this.usingMotionInput ? this.motionTarget : this.pointerTarget;
-    const factor = this.usingMotionInput ? this.motionLerpFactor : this.lerpFactor;
+    // Priority: touch (finger on screen) > gyro > mouse
+    const target = this.touchActive
+      ? this.pointerTarget
+      : this.usingMotionInput
+        ? this.motionTarget
+        : this.pointerTarget;
+    const factor = this.usingMotionInput && !this.touchActive
+      ? this.motionLerpFactor
+      : this.lerpFactor;
     this.smoothedOutput.x = lerp(this.smoothedOutput.x, target.x, factor);
     this.smoothedOutput.y = lerp(this.smoothedOutput.y, target.y, factor);
     return this.smoothedOutput;
@@ -83,7 +99,10 @@ class ComponentInputHandler {
   dispose(): void {
     this.host.removeEventListener('mousemove', this.handleMouseMove);
     this.host.removeEventListener('mouseleave', this.resetPointerTarget);
-    this.host.removeEventListener('touchstart', this.handleFirstTouch);
+    this.host.removeEventListener('touchstart', this.handleTouchStart);
+    this.host.removeEventListener('touchmove', this.handleTouchMove);
+    this.host.removeEventListener('touchend', this.handleTouchEnd);
+    this.host.removeEventListener('touchcancel', this.handleTouchEnd);
     if (this.motionListenerAttached) {
       window.removeEventListener('deviceorientation', this.handleDeviceOrientation);
       this.motionListenerAttached = false;
@@ -103,10 +122,40 @@ class ComponentInputHandler {
     this.pointerTarget.y = 0;
   };
 
-  private readonly handleFirstTouch = async () => {
-    if (this.motionRequested) return;
-    this.motionRequested = true;
+  private readonly handleTouchStart = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    this.touchActive = true;
+    this.touchAnchorX = touch.clientX;
+    this.touchAnchorY = touch.clientY;
+    this.pointerTarget.x = 0;
+    this.pointerTarget.y = 0;
 
+    // Request gyro permission on first touch (non-blocking).
+    // Touch input works immediately; gyro activates in the background.
+    if (!this.motionRequested) {
+      this.motionRequested = true;
+      void this.requestMotionPermission();
+    }
+  };
+
+  private readonly handleTouchMove = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - this.touchAnchorX;
+    const dy = touch.clientY - this.touchAnchorY;
+    const range = ComponentInputHandler.TOUCH_DRAG_RANGE;
+    this.pointerTarget.x = clamp(dx / range, -1, 1);
+    this.pointerTarget.y = clamp(dy / range, -1, 1);
+  };
+
+  private readonly handleTouchEnd = () => {
+    this.touchActive = false;
+    this.pointerTarget.x = 0;
+    this.pointerTarget.y = 0;
+  };
+
+  private async requestMotionPermission(): Promise<void> {
     if (typeof DeviceOrientationEvent === 'undefined') return;
 
     type IOSEvent = typeof DeviceOrientationEvent & {
@@ -128,7 +177,7 @@ class ComponentInputHandler {
       this.motionListenerAttached = true;
     }
     this.usingMotionInput = true;
-  };
+  }
 
   private readonly handleDeviceOrientation = (event: DeviceOrientationEvent) => {
     const rawX = clamp((event.gamma ?? 0) / 45, -1, 1);
