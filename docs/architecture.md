@@ -200,7 +200,9 @@ Produces a single IIFE file with all dependencies bundled. No separate asset loa
 | `docs/diagrams/depth-precompute-pipeline.md` | Offline generation + runtime interpolation |
 | `docs/diagrams/build-system.md` | Build targets + packaging flow |
 | **Decisions** | |
-| `docs/adr/ADR-001-*.md` | Architecture Decision Records |
+| `docs/adr/ADR-001-*.md` | Depth-derived parallax parameter tuning |
+| `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (Three.js, no higher-level engines) |
+| `docs/adr/ADR-003-*.md` | Staging via Vercel preview deployments |
 | **Parallax Effect** | |
 | `docs/parallax/depth-derivation-rules.md` | Inviolable derivation system rules |
 | `docs/parallax/depth-analysis-skills.md` | Formal function specifications |
