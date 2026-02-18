@@ -10,5 +10,11 @@
     "src": "/videos/sneaker-drop/video.mp4",
     "depthSrc": "/videos/sneaker-drop/depth-data.bin",
     "depthMeta": "/videos/sneaker-drop/depth-meta.json"
+  },
+  {
+    "id": "luxury-perfume",
+    "src": "/videos/luxury-perfume/video.mp4",
+    "depthSrc": "/videos/luxury-perfume/depth-data.bin",
+    "depthMeta": "/videos/luxury-perfume/depth-meta.json"
   }
 ]
