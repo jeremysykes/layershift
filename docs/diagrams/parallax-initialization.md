@@ -36,7 +36,7 @@ sequenceDiagram
 
     App->>+Renderer: new ParallaxRenderer(mergedConfig)
     App->>Renderer: initialize(video, w, h)
-    Note right of Renderer: Creates VideoTexture, depth DataTexture,<br/>ShaderMaterial, sets all uniforms once
+    Note right of Renderer: Creates WebGL 2 program, video texture,<br/>depth texture (R8), sets all uniforms once
     App->>Renderer: start(video, readDepth, readInput)
     Note right of Renderer: Registers RAF + RVFC loops
     Renderer-->>-App: rendering

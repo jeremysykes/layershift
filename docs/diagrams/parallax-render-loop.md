@@ -10,7 +10,7 @@ graph LR
         direction TB
         VFC["requestVideoFrameCallback"]
         RD["readDepth(mediaTime)"]
-        UT["Upload Uint8Array to<br/>depth DataTexture"]
+        UT["Upload Uint8Array to<br/>depth texture (R8)"]
         EV["Dispatch frame event"]
         VFC --> RD --> UT --> EV
         EV -->|re-register| VFC
@@ -21,7 +21,7 @@ graph LR
         RAF["requestAnimationFrame"]
         RI["readInput() → {x, y}"]
         UO["Update uOffset uniform"]
-        RENDER["renderer.render(scene, camera)"]
+        RENDER["gl.drawArrays (fullscreen quad)"]
         RAF --> RI --> UO --> RENDER
         RENDER -->|re-register| RAF
     end

@@ -154,7 +154,7 @@ The bottleneck is concurrent video decoders, not GPU or Workers. Most mobile bro
 
 | Resource | Cost |
 |----------|------|
-| GPU textures | 2 (VideoTexture + 262 KB depth DataTexture) |
+| GPU textures | 2 (video texture + 262 KB depth texture) |
 | Draw calls / frame | 1 |
 | Web Workers | 1 (with sync fallback) |
 | Worker RAM | ~3 MB (processing buffers) |

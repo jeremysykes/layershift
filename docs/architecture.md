@@ -2,7 +2,7 @@
 
 ## Overview
 
-Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via Three.js. Effects are embeddable in any framework or plain HTML as a single IIFE bundle.
+Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via WebGL 2. Effects are embeddable in any framework or plain HTML as a single IIFE bundle with zero runtime dependencies.
 
 **Parallax** (`<layershift-parallax>`) is the first effect — depth-aware parallax motion driven by mouse or gyroscope input using precomputed depth maps. Future effects will share the same core infrastructure (input handling, video loading, depth system, build pipeline).
 
@@ -32,7 +32,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 
 | File | Scope | Purpose |
 |------|-------|---------|
-| `parallax-renderer.ts` | Parallax | Three.js scene, GLSL shaders, render loops |
+| `parallax-renderer.ts` | Parallax | WebGL 2 renderer, GLSL shaders, render loops |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
 | `depth-worker.ts` | Shared | Web Worker for bilateral filter + interpolation |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, interpolation |
@@ -61,7 +61,7 @@ See `docs/diagrams/parallax-initialization.md` for the full sequence diagram.
 3. **Parameter derivation** (sync, O(1)): continuous functions mapping depth statistics to shader parameters
 4. **Config merge**: explicit > derived > calibrated defaults
 5. **Depth interpolator**: Web Worker preferred, main-thread fallback
-6. **Renderer setup**: Three.js scene, shader material, uniforms set once
+6. **Renderer setup**: WebGL 2 program, textures, uniforms set once
 7. **Render loop start**: RAF + RVFC registration
 
 ### Render Loop
@@ -76,8 +76,8 @@ Two decoupled loops:
 
 | Uniform | Source | Updated |
 |---------|--------|---------|
-| uVideo | VideoTexture | Auto (GPU) |
-| uDepth | DataTexture | Per depth frame (~5fps) |
+| uImage | Video texture (WebGL 2) | Per RAF frame |
+| uDepth | Depth texture (R8) | Per depth frame (~5fps) |
 | uOffset | InputHandler | Per RAF frame |
 | uStrength | Config | Once at init |
 | uPomEnabled | Config | Once at init |
@@ -106,7 +106,7 @@ See `docs/diagrams/depth-parameter-derivation.md` for the data flow and preceden
 
 ### Element: `<layershift-parallax>`
 
-Shadow DOM encapsulates a `<canvas>` (Three.js) and hidden `<video>`.
+Shadow DOM encapsulates a `<canvas>` (WebGL 2) and hidden `<video>`.
 
 **Observed attributes:**
 - `src`, `depth-src`, `depth-meta` (required asset paths)
@@ -164,7 +164,7 @@ See `docs/diagrams/build-system.md` for the build flow diagram.
 |---------|--------|-------------|
 | `npm run dev` | Dev server :5173 | Vite dev server with HMR |
 | `npm run build` | `dist/` | Landing page build (TypeScript + Vite) |
-| `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle (Three.js + Worker inlined) |
+| `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle (Worker inlined) |
 | `npm run precompute` | depth-data.bin + depth-meta.json | Generate depth maps from video |
 | `npm run package` | `output/` | Bundle component + video + depth for deployment |
 | `npm run test` | — | Vitest unit tests |
@@ -172,7 +172,7 @@ See `docs/diagrams/build-system.md` for the build flow diagram.
 
 ### Component Build (vite.config.component.ts)
 
-Produces a single IIFE file with all dependencies bundled. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` element.
+Produces a single IIFE file with zero runtime dependencies. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` element.
 
 ## Performance Characteristics
 
@@ -183,8 +183,8 @@ Produces a single IIFE file with all dependencies bundled. No separate asset loa
 | Render draw calls per frame | 1 |
 | Depth texture upload frequency | ~5fps (keyframe rate) |
 | Depth texture size | 512x512 Uint8 (~256KB) |
-| Bundle size (gzipped) | ~100KB |
-| Runtime dependencies | Three.js (bundled) |
+| Bundle size (gzipped) | ~40KB |
+| Runtime dependencies | None (pure WebGL 2) |
 
 ## Documentation Map
 
@@ -201,7 +201,8 @@ Produces a single IIFE file with all dependencies bundled. No separate asset loa
 | `docs/diagrams/build-system.md` | Build targets + packaging flow |
 | **Decisions** | |
 | `docs/adr/ADR-001-*.md` | Depth-derived parallax parameter tuning |
-| `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (Three.js, no higher-level engines) |
+| `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (superseded by ADR-004) |
+| `docs/adr/ADR-004-*.md` | Three.js to pure WebGL 2 migration |
 | `docs/adr/ADR-003-*.md` | Staging via Vercel preview deployments |
 | **Parallax Effect** | |
 | `docs/parallax/depth-derivation-rules.md` | Inviolable derivation system rules |

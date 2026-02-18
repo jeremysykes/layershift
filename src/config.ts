@@ -3,7 +3,7 @@
  *
  * The parallax effect works by displacing UV coordinates in a fragment shader
  * based on a per-pixel depth map. The video is rendered at native display
- * resolution via THREE.VideoTexture, while a precomputed depth map (512x512)
+ * resolution via a WebGL video texture, while a precomputed depth map (512x512)
  * drives the displacement.
  *
  * Two rendering modes are available:
@@ -30,7 +30,7 @@ export const APP_CONFIG = {
   /**
    * Maximum width for depth processing. The precomputed depth maps are
    * generated at this resolution. Does not affect the color video resolution,
-   * which is sampled at native display resolution via VideoTexture.
+   * which is sampled at native display resolution via the video texture.
    */
   workingMaxWidth: 512,
 

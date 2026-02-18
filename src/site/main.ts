@@ -144,6 +144,10 @@ function setupFrameworkTabs(): void {
 // Init
 // ---------------------------------------------------------------------------
 
+// Reveal the page now that CSS has loaded (prevents FOUC of unstyled HTML).
+// The <head> has `body { visibility: hidden }` — this removes it.
+document.body.classList.add('ready');
+
 setupRandomVideo();
 setupHeroScroll();
 setupSectionReveal();

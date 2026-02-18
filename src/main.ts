@@ -8,7 +8,7 @@
  * 3. Create a DepthFrameInterpolator to smoothly sample between the
  *    5fps precomputed depth keyframes at any playback time.
  * 4. Initialize the ParallaxRenderer with derived config, the video
- *    element (for VideoTexture), and the depth map dimensions.
+ *    element (for video texture), and the depth map dimensions.
  * 5. Start the render loop: each frame, the renderer asks the
  *    interpolator for the current depth map and the InputHandler
  *    for the current mouse/gyro offset, then the GPU shader does
@@ -120,8 +120,8 @@ async function bootstrap(): Promise<void> {
     readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
   }
 
-  // Initialize the renderer with the video element (for VideoTexture)
-  // and the depth map dimensions (for the depth DataTexture).
+  // Initialize the renderer with the video element (for video texture)
+  // and the depth map dimensions (for the depth texture).
   renderer.initialize(video, depthData.meta.width, depthData.meta.height);
 
   // Start the render loop. The renderer calls these callbacks each frame:

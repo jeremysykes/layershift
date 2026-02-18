@@ -56,6 +56,14 @@ a:hover {
   height: 100%;
 }
 
+/* Prevent FOUC: show black box before the Web Component is defined and
+   its Shadow DOM takes over. Once defined, :host { background: #000 }
+   inside the component handles it. */
+layershift-parallax:not(:defined) {
+  display: block;
+  background: #000;
+}
+
 /* ---- Wordmark ---- */
 
 #hero-wordmark {
