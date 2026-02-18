@@ -17,6 +17,155 @@ export interface BinaryDownloadProgress {
   fraction: number;
 }
 
+/**
+ * Worker-backed depth frame interpolator.
+ *
+ * Offloads the bilateral filter, interpolation, and resize to a Web Worker
+ * so the main thread stays free for smooth rendering. Uses double-buffering:
+ * the main thread always has a ready-to-use depth frame while the worker
+ * computes the next one in parallel.
+ *
+ * ## Double-buffer strategy
+ *
+ * - `currentBuffer` — the latest completed depth frame, always available
+ *   for synchronous reads via `sample()`.
+ * - When the render loop calls `sample(timeSec)`, it returns `currentBuffer`
+ *   immediately (zero main-thread work) and posts a request to the worker
+ *   for the new time if it differs from the last requested time.
+ * - When the worker responds, `currentBuffer` is swapped to the new result.
+ * - During the 1-2 frames of latency, the previous depth frame is shown —
+ *   this is imperceptible since depth only changes at ~5fps.
+ */
+export class WorkerDepthInterpolator {
+  private worker: Worker;
+  private currentBuffer: Uint8Array;
+  private pendingTimeSec: number | null = null;
+  private workerBusy = false;
+  private disposed = false;
+
+  private constructor(
+    worker: Worker,
+    bufferSize: number,
+  ) {
+    this.worker = worker;
+    this.currentBuffer = new Uint8Array(bufferSize);
+  }
+
+  /**
+   * Create a WorkerDepthInterpolator, initializing the worker with frame data.
+   *
+   * The frame ArrayBuffers are transferred (zero-copy) to the worker.
+   * After this call, the original depthData.frames arrays are neutered
+   * and should not be accessed.
+   */
+  static async create(
+    depthData: PrecomputedDepthData,
+    targetWidth: number,
+    targetHeight: number
+  ): Promise<WorkerDepthInterpolator> {
+    const worker = new Worker(
+      new URL('./depth-worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+
+    const bufferSize = targetWidth * targetHeight;
+    const instance = new WorkerDepthInterpolator(worker, bufferSize);
+
+    // Copy frame data into standalone ArrayBuffers for transfer.
+    // The original frames are subarrays of a single large buffer,
+    // so we can't transfer them directly.
+    const frameBuffers: ArrayBuffer[] = depthData.frames.map((frame) => {
+      const copy = new Uint8Array(frame.length);
+      copy.set(frame);
+      return copy.buffer;
+    });
+
+    // Send init message with transferred buffers (zero-copy).
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Worker init timeout')), 10_000);
+
+      worker.onmessage = (e: MessageEvent) => {
+        if (e.data.type === 'ready') {
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+      worker.onerror = (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      };
+
+      worker.postMessage(
+        {
+          type: 'init',
+          frames: frameBuffers,
+          meta: {
+            frameCount: depthData.meta.frameCount,
+            fps: depthData.meta.fps,
+            width: depthData.meta.width,
+            height: depthData.meta.height,
+          },
+          targetWidth,
+          targetHeight,
+        },
+        frameBuffers  // Transfer list
+      );
+    });
+
+    // Set up the result handler
+    worker.onmessage = (e: MessageEvent) => {
+      if (e.data.type === 'result') {
+        instance.currentBuffer = e.data.data;
+        instance.workerBusy = false;
+
+        // If a newer time was requested while the worker was busy,
+        // immediately send the latest request.
+        if (instance.pendingTimeSec !== null) {
+          const nextTime = instance.pendingTimeSec;
+          instance.pendingTimeSec = null;
+          instance.requestSample(nextTime);
+        }
+      }
+    };
+
+    return instance;
+  }
+
+  /**
+   * Get the current depth frame — always synchronous, zero main-thread work.
+   *
+   * Returns the latest completed depth frame from the worker. If the worker
+   * hasn't finished processing the current time yet, returns the previous
+   * frame (1-2 frame latency is imperceptible at ~5fps depth changes).
+   *
+   * Automatically requests the worker to process the new time in the background.
+   */
+  sample(timeSec: number): Uint8Array {
+    this.requestSample(timeSec);
+    return this.currentBuffer;
+  }
+
+  /** Send a sample request to the worker if it's not busy. */
+  private requestSample(timeSec: number): void {
+    if (this.disposed) return;
+
+    if (this.workerBusy) {
+      // Worker is processing — queue the latest time for when it's done
+      this.pendingTimeSec = timeSec;
+      return;
+    }
+
+    this.workerBusy = true;
+    this.worker.postMessage({ type: 'sample', timeSec });
+  }
+
+  /** Terminate the worker and release resources. */
+  dispose(): void {
+    this.disposed = true;
+    this.worker.terminate();
+  }
+}
+
 export class DepthFrameInterpolator {
   private readonly interpolatedDepth: Float32Array;
   private readonly resizedDepth: Float32Array;

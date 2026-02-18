@@ -31,6 +31,7 @@ import { ParallaxRenderer } from './parallax-renderer';
 import {
   type BinaryDownloadProgress,
   DepthFrameInterpolator,
+  WorkerDepthInterpolator,
   loadPrecomputedDepth,
 } from './precomputed-depth';
 import { UIController } from './ui';
@@ -83,15 +84,27 @@ async function bootstrap(): Promise<void> {
 
   const [video, depthData] = await Promise.all([videoPromise, depthDataPromise]);
 
-  // The depth interpolator smoothly blends between precomputed 5fps
-  // depth keyframes. We pass the depth map's native dimensions as both
-  // source and target — no bilinear resize needed since the shader
-  // samples the depth texture at whatever resolution it was created.
-  const depthInterpolator = new DepthFrameInterpolator(
-    depthData,
-    depthData.meta.width,
-    depthData.meta.height
-  );
+  // Create depth interpolator — try Web Worker first for smooth playback
+  // (bilateral filter off main thread), fall back to synchronous if
+  // Workers aren't available (e.g. file:// protocol, strict CSP).
+  let readDepth: (timeSec: number) => Uint8Array;
+  let workerInterpolator: WorkerDepthInterpolator | null = null;
+  try {
+    workerInterpolator = await WorkerDepthInterpolator.create(
+      depthData,
+      depthData.meta.width,
+      depthData.meta.height
+    );
+    readDepth = (timeSec: number) => workerInterpolator!.sample(timeSec);
+  } catch {
+    // Worker unavailable — fall back to main-thread processing
+    const syncInterpolator = new DepthFrameInterpolator(
+      depthData,
+      depthData.meta.width,
+      depthData.meta.height
+    );
+    readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
+  }
 
   // Initialize the renderer with the video element (for VideoTexture)
   // and the depth map dimensions (for the depth DataTexture).
@@ -102,7 +115,7 @@ async function bootstrap(): Promise<void> {
   //   readInput()        → { x, y } parallax offset in [-1, 1]
   renderer.start(
     video,
-    (timeSec: number) => depthInterpolator.sample(timeSec),
+    readDepth,
     () => input.update()
   );
 
@@ -115,6 +128,7 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('beforeunload', () => {
     renderer.dispose();
     input.dispose();
+    workerInterpolator?.dispose();
     video.remove();
   });
 }

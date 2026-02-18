@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import {
   type PrecomputedDepthData,
   DepthFrameInterpolator,
+  WorkerDepthInterpolator,
   loadPrecomputedDepth,
 } from '../../precomputed-depth';
 import { ParallaxRenderer } from '../../parallax-renderer';
@@ -157,6 +158,7 @@ export class DepthParallaxElement extends HTMLElement {
   private container: HTMLDivElement | null = null;
   private renderer: ParallaxRenderer | null = null;
   private inputHandler: ComponentInputHandler | null = null;
+  private depthWorker: WorkerDepthInterpolator | null = null;
   private video: HTMLVideoElement | null = null;
   private initialized = false;
   private abortController: AbortController | null = null;
@@ -333,12 +335,34 @@ export class DepthParallaxElement extends HTMLElement {
       // Convert to UV-space fraction based on the video width.
       const parallaxStrength = this.parallaxMax / Math.max(video.videoWidth, 1);
 
-      // Create depth interpolator
-      const depthInterpolator = new DepthFrameInterpolator(
-        depthData,
-        depthData.meta.width,
-        depthData.meta.height
-      );
+      // Create depth interpolator — try Web Worker first for smooth playback,
+      // fall back to synchronous if Workers aren't available (e.g. file:// or CSP).
+      let readDepth: (timeSec: number) => Uint8Array;
+      try {
+        const workerInterpolator = await WorkerDepthInterpolator.create(
+          depthData,
+          depthData.meta.width,
+          depthData.meta.height
+        );
+        this.depthWorker = workerInterpolator;
+        readDepth = (timeSec: number) => workerInterpolator.sample(timeSec);
+      } catch {
+        // Worker unavailable — fall back to main-thread processing
+        const syncInterpolator = new DepthFrameInterpolator(
+          depthData,
+          depthData.meta.width,
+          depthData.meta.height
+        );
+        readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
+      }
+
+      // Check if disconnected during worker init
+      if (this.abortController.signal.aborted) {
+        video.remove();
+        this.depthWorker?.dispose();
+        this.depthWorker = null;
+        return;
+      }
 
       // Create renderer inside our shadow DOM container
       this.renderer = new ParallaxRenderer(this.container!, {
@@ -359,7 +383,7 @@ export class DepthParallaxElement extends HTMLElement {
 
       this.renderer.start(
         video,
-        (timeSec: number) => depthInterpolator.sample(timeSec),
+        readDepth,
         () => {
           const raw = this.inputHandler!.update();
           return {
@@ -450,6 +474,9 @@ export class DepthParallaxElement extends HTMLElement {
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
+
+    this.depthWorker?.dispose();
+    this.depthWorker = null;
 
     if (this.video) {
       this.video.pause();

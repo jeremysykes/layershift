@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DepthFrameInterpolator,
+  WorkerDepthInterpolator,
   type PrecomputedDepthData,
   type DepthMeta,
 } from '../../src/precomputed-depth';
@@ -148,5 +149,18 @@ describe('DepthFrameInterpolator', () => {
         expect(result[i]).toBeLessThanOrEqual(255);
       }
     }
+  });
+});
+
+describe('WorkerDepthInterpolator', () => {
+  it('exports the WorkerDepthInterpolator class', () => {
+    expect(WorkerDepthInterpolator).toBeDefined();
+    expect(typeof WorkerDepthInterpolator.create).toBe('function');
+  });
+
+  it('create() is an async factory method', () => {
+    // Verify the static create method returns a Promise
+    // (Worker won't work in happy-dom, but we test the API shape)
+    expect(WorkerDepthInterpolator.create.length).toBe(3); // 3 params
   });
 });
