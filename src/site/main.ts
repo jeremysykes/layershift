@@ -20,19 +20,31 @@ interface VideoEntry {
   depthMeta: string;
 }
 
+function applyVideo(el: HTMLElement, video: VideoEntry): void {
+  el.setAttribute('src', video.src);
+  el.setAttribute('depth-src', video.depthSrc);
+  el.setAttribute('depth-meta', video.depthMeta);
+}
+
 async function setupRandomVideo(): Promise<void> {
   try {
     const res = await fetch('/videos/manifest.json');
     const videos: VideoEntry[] = await res.json();
     if (!videos.length) return;
 
-    const pick = videos[Math.floor(Math.random() * videos.length)];
-
     const elements = document.querySelectorAll<HTMLElement>('layershift-parallax');
-    elements.forEach((el) => {
-      el.setAttribute('src', pick.src);
-      el.setAttribute('depth-src', pick.depthSrc);
-      el.setAttribute('depth-meta', pick.depthMeta);
+    if (!elements.length) return;
+
+    // Shuffle the video list (Fisher-Yates)
+    const shuffled = [...videos];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // Assign a different video to each element, cycling if more elements than videos
+    elements.forEach((el, i) => {
+      applyVideo(el, shuffled[i % shuffled.length]);
     });
   } catch (err) {
     console.warn('Failed to load video manifest, using defaults', err);
