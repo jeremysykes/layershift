@@ -378,7 +378,7 @@ export class ParallaxRenderer {
 
   /**
    * Optional callback invoked on each new video frame (from RVFC).
-   * The Web Component uses this to dispatch the 'depth-parallax:frame' event.
+   * The Web Component uses this to dispatch the 'layershift-parallax:frame' event.
    */
   private onVideoFrame: ((currentTime: number, frameNumber: number) => void) | null = null;
 

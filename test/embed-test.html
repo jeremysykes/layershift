@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>depth-parallax Embed Test</title>
+  <title>layershift Embed Test</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0a0a0a; color: #ccc; font-family: system-ui, sans-serif; }
@@ -26,24 +26,24 @@
   <h1>Standalone Embed Test</h1>
   <p>Full-viewport instance:</p>
   <div class="test-fullscreen">
-    <depth-parallax
+    <layershift-parallax
       src="/sample.mp4"
       depth-src="/depth-data.bin"
       depth-meta="/depth-meta.json"
-    ></depth-parallax>
+    ></layershift-parallax>
   </div>
 
   <p>Inline instance (16:9, 800px max):</p>
   <div class="test-inline">
-    <depth-parallax
+    <layershift-parallax
       src="/sample.mp4"
       depth-src="/depth-data.bin"
       depth-meta="/depth-meta.json"
       parallax-x="0.4"
       parallax-y="1.0"
-    ></depth-parallax>
+    ></layershift-parallax>
   </div>
 
-  <script type="module" src="/src/components/depth-parallax/index.ts"></script>
+  <script type="module" src="/src/components/layershift/index.ts"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
 /**
  * Portfolio landing page entry point.
  *
- * Registers the <depth-parallax> Web Component and sets up scroll
+ * Registers the <layershift-parallax> Web Component and sets up scroll
  * interactions (hero fade, section reveal, framework tabs).
  */
 
-import '../components/depth-parallax/index';
+import '../components/layershift/index';
 import './styles.css';
 
 // ---------------------------------------------------------------------------

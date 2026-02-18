@@ -14,11 +14,11 @@
   },
   "include": ["src", "vite.config.ts", "vite.config.component.ts", "vitest.config.ts", "playwright.config.ts"],
   "exclude": [
-    "src/components/depth-parallax/wrappers/react.tsx",
-    "src/components/depth-parallax/wrappers/angular.ts",
-    "src/components/depth-parallax/wrappers/vue.vue",
-    "src/components/depth-parallax/wrappers/Svelte.svelte",
-    "src/components/depth-parallax/wrappers/vanilla.js",
-    "src/components/depth-parallax/global.d.ts"
+    "src/components/layershift/wrappers/react.tsx",
+    "src/components/layershift/wrappers/angular.ts",
+    "src/components/layershift/wrappers/vue.vue",
+    "src/components/layershift/wrappers/Svelte.svelte",
+    "src/components/layershift/wrappers/vanilla.js",
+    "src/components/layershift/global.d.ts"
   ]
 }

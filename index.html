@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Depth Parallax — Embeddable Video Effects</title>
+    <title>Layershift — Embeddable Video Effects</title>
     <meta name="description" content="Ready-to-embed Web Components that make video feel alive on any website. No framework dependencies. One script tag." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,14 +16,15 @@
     <!-- ============================================================ -->
 
     <div id="hero">
-      <depth-parallax
+      <layershift-parallax
         src="/sample.mp4"
         depth-src="/depth-data.bin"
         depth-meta="/depth-meta.json"
-        parallax-x="0.4"
+        parallax-x="0.6"
         parallax-y="1.0"
-        parallax-max="30"
-      ></depth-parallax>
+        parallax-max="50"
+        overscan="0.08"
+      ></layershift-parallax>
     </div>
 
     <div id="hero-scroll-hint">
@@ -61,28 +62,28 @@
 
           <!-- Inline demo -->
           <div class="inline-demo">
-            <depth-parallax
+            <layershift-parallax
               src="/sample.mp4"
               depth-src="/depth-data.bin"
               depth-meta="/depth-meta.json"
-              parallax-x="0.4"
+              parallax-x="0.5"
               parallax-y="1.0"
-              parallax-max="30"
-            ></depth-parallax>
+              parallax-max="40"
+            ></layershift-parallax>
           </div>
 
           <!-- Embed code -->
           <p>One script tag. One element.</p>
 
           <div class="code-block"><code><span class="comment">&lt;!-- Add the script --&gt;</span>
-<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/depth-parallax.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
 
 <span class="comment">&lt;!-- Use the element --&gt;</span>
-<span class="tag">&lt;depth-parallax</span>
+<span class="tag">&lt;layershift-parallax</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
   <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
   <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
-<span class="tag">&gt;&lt;/depth-parallax&gt;</span></code></div>
+<span class="tag">&gt;&lt;/layershift-parallax&gt;</span></code></div>
 
           <!-- Framework tabs -->
           <div class="framework-tabs">
@@ -95,21 +96,21 @@
             </div>
 
             <div class="tab-panel active" data-tab="html">
-              <div class="code-block"><code><span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/depth-parallax.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+              <div class="code-block"><code><span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
 
-<span class="tag">&lt;depth-parallax</span>
+<span class="tag">&lt;layershift-parallax</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
   <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
   <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
-<span class="tag">&gt;&lt;/depth-parallax&gt;</span></code></div>
+<span class="tag">&gt;&lt;/layershift-parallax&gt;</span></code></div>
             </div>
 
             <div class="tab-panel" data-tab="react">
-              <div class="code-block"><code><span class="tag">import</span> { DepthParallax } <span class="tag">from</span> <span class="string">'depth-parallax/react'</span>
+              <div class="code-block"><code><span class="tag">import</span> { Layershift } <span class="tag">from</span> <span class="string">'layershift/react'</span>
 
 <span class="tag">export default function</span> Hero() {
   <span class="tag">return</span> (
-    <span class="tag">&lt;DepthParallax</span>
+    <span class="tag">&lt;Layershift</span>
       <span class="attr">src</span>=<span class="string">"video.mp4"</span>
       <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
       <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
@@ -120,7 +121,7 @@
 
             <div class="tab-panel" data-tab="vue">
               <div class="code-block"><code><span class="tag">&lt;template&gt;</span>
-  <span class="tag">&lt;DepthParallax</span>
+  <span class="tag">&lt;Layershift</span>
     <span class="attr">src</span>=<span class="string">"video.mp4"</span>
     <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
     <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
@@ -128,16 +129,16 @@
 <span class="tag">&lt;/template&gt;</span>
 
 <span class="tag">&lt;script setup&gt;</span>
-<span class="tag">import</span> DepthParallax <span class="tag">from</span> <span class="string">'depth-parallax/vue'</span>
+<span class="tag">import</span> Layershift <span class="tag">from</span> <span class="string">'layershift/vue'</span>
 <span class="tag">&lt;/script&gt;</span></code></div>
             </div>
 
             <div class="tab-panel" data-tab="svelte">
               <div class="code-block"><code><span class="tag">&lt;script&gt;</span>
-  <span class="tag">import</span> DepthParallax <span class="tag">from</span> <span class="string">'depth-parallax/svelte'</span>
+  <span class="tag">import</span> Layershift <span class="tag">from</span> <span class="string">'layershift/svelte'</span>
 <span class="tag">&lt;/script&gt;</span>
 
-<span class="tag">&lt;DepthParallax</span>
+<span class="tag">&lt;Layershift</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
   <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
   <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
@@ -145,12 +146,12 @@
             </div>
 
             <div class="tab-panel" data-tab="angular">
-              <div class="code-block"><code><span class="tag">import</span> { DepthParallaxComponent } <span class="tag">from</span> <span class="string">'depth-parallax/angular'</span>
+              <div class="code-block"><code><span class="tag">import</span> { LayershiftComponent } <span class="tag">from</span> <span class="string">'layershift/angular'</span>
 
 @Component({
-  <span class="attr">imports</span>: [DepthParallaxComponent],
+  <span class="attr">imports</span>: [LayershiftComponent],
   <span class="attr">template</span>: <span class="string">`
-    &lt;app-depth-parallax
+    &lt;app-layershift-parallax
       src="video.mp4"
       depthSrc="depth-data.bin"
       depthMeta="depth-meta.json"
@@ -254,45 +255,45 @@
             </thead>
             <tbody>
               <tr>
-                <td><code>depth-parallax:ready</code></td>
+                <td><code>layershift-parallax:ready</code></td>
                 <td>videoWidth, videoHeight, duration</td>
                 <td>Initialization complete</td>
               </tr>
               <tr>
-                <td><code>depth-parallax:play</code></td>
+                <td><code>layershift-parallax:play</code></td>
                 <td>currentTime</td>
                 <td>Video starts playing</td>
               </tr>
               <tr>
-                <td><code>depth-parallax:pause</code></td>
+                <td><code>layershift-parallax:pause</code></td>
                 <td>currentTime</td>
                 <td>Video pauses</td>
               </tr>
               <tr>
-                <td><code>depth-parallax:loop</code></td>
+                <td><code>layershift-parallax:loop</code></td>
                 <td>loopCount</td>
                 <td>Video loops back to start</td>
               </tr>
               <tr>
-                <td><code>depth-parallax:frame</code></td>
+                <td><code>layershift-parallax:frame</code></td>
                 <td>currentTime, frameNumber</td>
                 <td>New video frame presented</td>
               </tr>
               <tr>
-                <td><code>depth-parallax:error</code></td>
+                <td><code>layershift-parallax:error</code></td>
                 <td>message</td>
                 <td>Initialization error</td>
               </tr>
             </tbody>
           </table>
 
-          <div class="code-block"><code><span class="tag">const</span> el = document.querySelector(<span class="string">'depth-parallax'</span>);
+          <div class="code-block"><code><span class="tag">const</span> el = document.querySelector(<span class="string">'layershift-parallax'</span>);
 
-el.addEventListener(<span class="string">'depth-parallax:ready'</span>, (e) =&gt; {
+el.addEventListener(<span class="string">'layershift-parallax:ready'</span>, (e) =&gt; {
   console.log(<span class="string">`Video: ${e.detail.videoWidth}x${e.detail.videoHeight}`</span>);
 });
 
-el.addEventListener(<span class="string">'depth-parallax:frame'</span>, (e) =&gt; {
+el.addEventListener(<span class="string">'layershift-parallax:frame'</span>, (e) =&gt; {
   <span class="comment">// Sync external UI to exact video frames</span>
   updateTimeline(e.detail.currentTime);
 });</code></div>
@@ -339,12 +340,12 @@ el.addEventListener(<span class="string">'depth-parallax:frame'</span>, (e) =&gt
             once &mdash; it produces the depth binary and metadata files. Then embed.
           </p>
           <div class="code-block"><code><span class="comment"># Install</span>
-npm install depth-aware-parallax-video
+npm install layershift
 
 <span class="comment"># Generate depth data</span>
 npm run precompute -- your-video.mp4</code></div>
           <p>
-            <a href="https://github.com/jeremysykes/depth-aware-parallax-video" target="_blank" rel="noopener">
+            <a href="https://github.com/jeremysykes/layershift" target="_blank" rel="noopener">
               View on GitHub &rarr;
             </a>
           </p>
@@ -360,7 +361,7 @@ npm run precompute -- your-video.mp4</code></div>
           </p>
           <a
             class="cta-link"
-            href="https://github.com/jeremysykes/depth-aware-parallax-video"
+            href="https://github.com/jeremysykes/layershift"
             target="_blank"
             rel="noopener"
           >
@@ -374,7 +375,7 @@ npm run precompute -- your-video.mp4</code></div>
       <footer class="footer">
         <div class="footer-links">
           <span>Built by <a href="https://github.com/jeremysykes" target="_blank" rel="noopener">Jeremy</a></span>
-          <a href="https://github.com/jeremysykes/depth-aware-parallax-video" target="_blank" rel="noopener" aria-label="GitHub">
+          <a href="https://github.com/jeremysykes/layershift" target="_blank" rel="noopener" aria-label="GitHub">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
           </a>
         </div>

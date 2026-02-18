@@ -4,7 +4,7 @@
  * Validates that the page loads, the Web Component initializes,
  * custom events fire, and interactive elements work.
  *
- * Note: The depth-parallax component loads ~19MB video + ~28MB depth data,
+ * Note: The layershift component loads ~19MB video + ~28MB depth data,
  * so generous timeouts are used. Headless Chromium supports WebGL.
  */
 
@@ -16,29 +16,29 @@ test.describe('Landing page', () => {
   });
 
   test('page loads with correct title', async ({ page }) => {
-    await expect(page).toHaveTitle(/depth/i);
+    await expect(page).toHaveTitle(/layershift/i);
   });
 
-  test('hero section exists with depth-parallax component', async ({ page }) => {
+  test('hero section exists with layershift component', async ({ page }) => {
     const hero = page.locator('#hero');
     await expect(hero).toBeVisible();
 
-    const component = hero.locator('depth-parallax');
+    const component = hero.locator('layershift-parallax');
     await expect(component).toBeAttached();
   });
 
-  test('depth-parallax component creates a shadow root with canvas', async ({ page }) => {
+  test('layershift component creates a shadow root with canvas', async ({ page }) => {
     test.setTimeout(60_000); // Component loads ~47MB of assets
 
     // Wait for the component to initialize (loads video + depth data)
-    const component = page.locator('depth-parallax').first();
+    const component = page.locator('layershift-parallax').first();
     await expect(component).toBeAttached();
 
     // Wait for shadow DOM canvas to appear (component needs time to load assets)
     await page.waitForFunction(
       () => {
-        const el = document.querySelector('depth-parallax');
-        return el?.shadowRoot?.querySelector('canvas') !== null;
+        const el = document.querySelector('layershift-parallax');
+        return !!el?.shadowRoot?.querySelector('canvas');
       },
       { timeout: 45_000 }
     );
@@ -49,15 +49,15 @@ test.describe('Landing page', () => {
     expect(hasCanvas).toBe(true);
   });
 
-  test('depth-parallax:ready event fires on initialization', async ({ page }) => {
+  test('layershift-parallax:ready event fires on initialization', async ({ page }) => {
     const readyDetail = await page.evaluate(() => {
       return new Promise<Record<string, unknown>>((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Ready event not received within 30s'));
         }, 30_000);
 
-        // Listen on all depth-parallax elements
-        document.addEventListener('depth-parallax:ready', ((e: CustomEvent) => {
+        // Listen on all layershift elements
+        document.addEventListener('layershift-parallax:ready', ((e: CustomEvent) => {
           clearTimeout(timeout);
           resolve(e.detail as Record<string, unknown>);
         }) as EventListener);
@@ -147,7 +147,7 @@ test.describe('WebGL rendering', () => {
     // Wait for the component to fully initialize
     await page.waitForFunction(
       () => {
-        const el = document.querySelector('depth-parallax');
+        const el = document.querySelector('layershift-parallax');
         const canvas = el?.shadowRoot?.querySelector('canvas');
         return canvas && canvas.width > 0 && canvas.height > 0;
       },
@@ -155,7 +155,7 @@ test.describe('WebGL rendering', () => {
     );
 
     const dimensions = await page.evaluate(() => {
-      const el = document.querySelector('depth-parallax');
+      const el = document.querySelector('layershift-parallax');
       const canvas = el?.shadowRoot?.querySelector('canvas');
       if (!canvas) return null;
       return { width: canvas.width, height: canvas.height };
@@ -168,15 +168,15 @@ test.describe('WebGL rendering', () => {
 });
 
 test.describe('Events', () => {
-  test('depth-parallax:play event fires when video plays', async ({ page }) => {
+  test('layershift-parallax:play event fires when video plays', async ({ page }) => {
     test.setTimeout(60_000);
     await page.goto('/');
 
     // Wait for the ready event (ensures component is fully initialized)
     await page.waitForFunction(
       () => {
-        const el = document.querySelector('depth-parallax');
-        return el?.shadowRoot?.querySelector('canvas') !== null;
+        const el = document.querySelector('layershift-parallax');
+        return !!el?.shadowRoot?.querySelector('canvas');
       },
       { timeout: 45_000 }
     );
@@ -191,12 +191,12 @@ test.describe('Events', () => {
           reject(new Error('Play event not received within 10s'));
         }, 10_000);
 
-        document.addEventListener('depth-parallax:play', ((e: CustomEvent) => {
+        document.addEventListener('layershift-parallax:play', ((e: CustomEvent) => {
           clearTimeout(timeout);
           resolve(e.detail as Record<string, unknown>);
         }) as EventListener, { once: true });
 
-        const el = document.querySelector('depth-parallax');
+        const el = document.querySelector('layershift-parallax');
         const video = el?.shadowRoot?.querySelector('video');
         if (video) {
           video.pause();
@@ -212,13 +212,13 @@ test.describe('Events', () => {
     expect(typeof playDetail.currentTime).toBe('number');
   });
 
-  test('depth-parallax:pause event fires when video pauses', async ({ page }) => {
+  test('layershift-parallax:pause event fires when video pauses', async ({ page }) => {
     await page.goto('/');
 
     await page.waitForFunction(
       () => {
-        const el = document.querySelector('depth-parallax');
-        return el?.shadowRoot?.querySelector('canvas') !== null;
+        const el = document.querySelector('layershift-parallax');
+        return !!el?.shadowRoot?.querySelector('canvas');
       },
       { timeout: 30_000 }
     );
@@ -229,12 +229,12 @@ test.describe('Events', () => {
           reject(new Error('Pause event not received within 5s'));
         }, 5_000);
 
-        document.addEventListener('depth-parallax:pause', ((e: CustomEvent) => {
+        document.addEventListener('layershift-parallax:pause', ((e: CustomEvent) => {
           clearTimeout(timeout);
           resolve(e.detail as Record<string, unknown>);
         }) as EventListener, { once: true });
 
-        const el = document.querySelector('depth-parallax');
+        const el = document.querySelector('layershift-parallax');
         const video = el?.shadowRoot?.querySelector('video');
         if (video) {
           video.pause();

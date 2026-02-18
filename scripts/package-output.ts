@@ -13,7 +13,7 @@
  *     video.mp4
  *     depth-data.bin
  *     depth-meta.json
- *     depth-parallax.js
+ *     layershift.js
  *     index.html
  *     README.md
  */
@@ -23,7 +23,7 @@ import { resolve } from 'node:path';
 
 const outputDir = resolve(process.argv[2] ?? './output');
 const publicDir = resolve('./public');
-const componentPath = resolve('./dist/components/depth-parallax.js');
+const componentPath = resolve('./dist/components/layershift.js');
 
 async function main(): Promise<void> {
   await mkdir(outputDir, { recursive: true });
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     copyFile(resolve(publicDir, 'sample.mp4'), resolve(outputDir, 'video.mp4')),
     copyFile(resolve(publicDir, 'depth-data.bin'), resolve(outputDir, 'depth-data.bin')),
     copyFile(resolve(publicDir, 'depth-meta.json'), resolve(outputDir, 'depth-meta.json')),
-    copyFile(componentPath, resolve(outputDir, 'depth-parallax.js')),
+    copyFile(componentPath, resolve(outputDir, 'layershift.js')),
   ]);
 
   // Generate index.html
@@ -42,26 +42,26 @@ async function main(): Promise<void> {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Depth Parallax</title>
+  <title>Layershift</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-    depth-parallax { display: block; width: 100%; height: 100%; }
+    layershift-parallax { display: block; width: 100%; height: 100%; }
   </style>
 </head>
 <body>
-  <depth-parallax
+  <layershift-parallax
     src="video.mp4"
     depth-src="depth-data.bin"
     depth-meta="depth-meta.json"
-  ></depth-parallax>
-  <script src="depth-parallax.js"></script>
+  ></layershift-parallax>
+  <script src="layershift.js"></script>
 </body>
 </html>
 `;
 
   // Generate README
-  const readme = `# Depth Parallax Embed
+  const readme = `# Layershift Embed
 
 This directory contains a self-contained depth parallax video embed.
 
@@ -70,7 +70,7 @@ This directory contains a self-contained depth parallax video embed.
 - \`video.mp4\` — Source video
 - \`depth-data.bin\` — Precomputed depth data
 - \`depth-meta.json\` — Depth metadata
-- \`depth-parallax.js\` — Web Component (self-contained, no dependencies)
+- \`layershift.js\` — Web Component (self-contained, no dependencies)
 - \`index.html\` — Fullscreen demo page
 
 ## Quick Start
@@ -86,23 +86,23 @@ npx serve .
 ### Plain HTML
 
 \`\`\`html
-<script src="depth-parallax.js"></script>
+<script src="layershift.js"></script>
 
-<depth-parallax
+<layershift-parallax
   src="video.mp4"
   depth-src="depth-data.bin"
   depth-meta="depth-meta.json"
-></depth-parallax>
+></layershift-parallax>
 \`\`\`
 
 ### React
 
 \`\`\`jsx
-import { DepthParallax } from 'depth-parallax/react'
+import { Layershift } from 'layershift/react'
 
 export default function Hero() {
   return (
-    <DepthParallax
+    <Layershift
       src="video.mp4"
       depthSrc="depth-data.bin"
       depthMeta="depth-meta.json"
@@ -115,7 +115,7 @@ export default function Hero() {
 
 \`\`\`vue
 <template>
-  <DepthParallax
+  <Layershift
     src="video.mp4"
     depth-src="depth-data.bin"
     depth-meta="depth-meta.json"
@@ -123,20 +123,20 @@ export default function Hero() {
 </template>
 
 <script setup>
-import DepthParallax from 'depth-parallax/vue'
+import Layershift from 'layershift/vue'
 </script>
 \`\`\`
 
-> **Vue note:** Add \`compilerOptions.isCustomElement: (tag) => tag === 'depth-parallax'\` to your Vite or Vue config.
+> **Vue note:** Add \`compilerOptions.isCustomElement: (tag) => tag === 'layershift-parallax'\` to your Vite or Vue config.
 
 ### Svelte
 
 \`\`\`svelte
 <script>
-  import DepthParallax from 'depth-parallax/svelte'
+  import Layershift from 'layershift/svelte'
 </script>
 
-<DepthParallax
+<Layershift
   src="video.mp4"
   depthSrc="depth-data.bin"
   depthMeta="depth-meta.json"
@@ -146,12 +146,12 @@ import DepthParallax from 'depth-parallax/vue'
 ### Angular
 
 \`\`\`typescript
-import { DepthParallaxComponent } from 'depth-parallax/angular'
+import { LayershiftComponent } from 'layershift/angular'
 
 @Component({
-  imports: [DepthParallaxComponent],
+  imports: [LayershiftComponent],
   template: \\\`
-    <app-depth-parallax
+    <app-layershift-parallax
       src="video.mp4"
       depthSrc="depth-data.bin"
       depthMeta="depth-meta.json"
@@ -187,7 +187,7 @@ export class HeroComponent {}
   console.log('  video.mp4');
   console.log('  depth-data.bin');
   console.log('  depth-meta.json');
-  console.log('  depth-parallax.js');
+  console.log('  layershift.js');
   console.log('  index.html');
   console.log('  README.md');
 }

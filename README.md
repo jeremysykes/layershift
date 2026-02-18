@@ -1,4 +1,4 @@
-# depth-aware-parallax-video
+# layershift
 
 Embeddable depth-aware parallax video effect as a Web Component. A precomputed depth map drives per-pixel UV displacement with Parallax Occlusion Mapping (POM), so near objects move more than far objects — creating a convincing 3D effect from a single 2D video.
 
@@ -7,13 +7,13 @@ One script tag. One custom element. Works in plain HTML, React, Vue, Svelte, Ang
 ## Quick Start
 
 ```html
-<script src="https://yourdomain.com/components/depth-parallax.js"></script>
+<script src="https://yourdomain.com/components/layershift.js"></script>
 
-<depth-parallax
+<layershift-parallax
   src="video.mp4"
   depth-src="depth-data.bin"
   depth-meta="depth-meta.json"
-></depth-parallax>
+></layershift-parallax>
 ```
 
 ## Prerequisites
@@ -78,43 +78,43 @@ Thin convenience wrappers for idiomatic usage:
 
 ```js
 // React
-import { DepthParallax } from 'depth-parallax/react'
+import { Layershift } from 'layershift/react'
 
 // Vue
-import DepthParallax from 'depth-parallax/vue'
+import Layershift from 'layershift/vue'
 
 // Svelte
-import DepthParallax from 'depth-parallax/svelte'
+import Layershift from 'layershift/svelte'
 
 // Angular
-import { DepthParallaxComponent } from 'depth-parallax/angular'
+import { LayershiftComponent } from 'layershift/angular'
 ```
 
-**Vue note:** Add `compilerOptions.isCustomElement: (tag) => tag === 'depth-parallax'` to your Vite or Vue config.
+**Vue note:** Add `compilerOptions.isCustomElement: (tag) => tag === 'layershift-parallax'` to your Vite or Vue config.
 
 **Angular note:** Add `CUSTOM_ELEMENTS_SCHEMA` to your module or component schemas.
 
 ## Events
 
-The `<depth-parallax>` element dispatches custom events that bubble through the DOM (including Shadow DOM). Listen on the element or any ancestor:
+The `<layershift-parallax>` element dispatches custom events that bubble through the DOM (including Shadow DOM). Listen on the element or any ancestor:
 
 | Event | Detail | When |
 |-------|--------|------|
-| `depth-parallax:ready` | `{ videoWidth, videoHeight, duration }` | Initialization complete |
-| `depth-parallax:play` | `{ currentTime }` | Video starts playing |
-| `depth-parallax:pause` | `{ currentTime }` | Video pauses |
-| `depth-parallax:loop` | `{ loopCount }` | Video loops back to start |
-| `depth-parallax:frame` | `{ currentTime, frameNumber }` | New video frame presented |
-| `depth-parallax:error` | `{ message }` | Initialization error |
+| `layershift-parallax:ready` | `{ videoWidth, videoHeight, duration }` | Initialization complete |
+| `layershift-parallax:play` | `{ currentTime }` | Video starts playing |
+| `layershift-parallax:pause` | `{ currentTime }` | Video pauses |
+| `layershift-parallax:loop` | `{ loopCount }` | Video loops back to start |
+| `layershift-parallax:frame` | `{ currentTime, frameNumber }` | New video frame presented |
+| `layershift-parallax:error` | `{ message }` | Initialization error |
 
 ```js
-const el = document.querySelector('depth-parallax');
+const el = document.querySelector('layershift-parallax');
 
-el.addEventListener('depth-parallax:ready', (e) => {
+el.addEventListener('layershift-parallax:ready', (e) => {
   console.log(`Video: ${e.detail.videoWidth}x${e.detail.videoHeight}`);
 });
 
-el.addEventListener('depth-parallax:frame', (e) => {
+el.addEventListener('layershift-parallax:frame', (e) => {
   // Sync external UI to video frames
   updateTimeline(e.detail.currentTime);
 });
@@ -126,12 +126,12 @@ The renderer uses `requestVideoFrameCallback` (RVFC) when available to sync dept
 
 - Depth work only runs when a new video frame is decoded (~24-30fps)
 - Parallax input stays smooth at display refresh rate (60-120fps)
-- The `depth-parallax:frame` event fires at true video frame rate, not animation frame rate
+- The `layershift-parallax:frame` event fires at true video frame rate, not animation frame rate
 - Browsers without RVFC fall back to the standard `requestAnimationFrame` loop automatically
 
 ## Performance
 
-Each `<depth-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden `<video>` element, and 2 GPU textures (1 draw call per frame). The bilateral filter runs entirely off the main thread.
+Each `<layershift-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden `<video>` element, and 2 GPU textures (1 draw call per frame). The bilateral filter runs entirely off the main thread.
 
 | Instances | Suitability |
 |-----------|-------------|

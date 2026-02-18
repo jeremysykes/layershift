@@ -5,3 +5,4 @@ output
 *.log
 .claude/worktrees
 .vercel
+raw

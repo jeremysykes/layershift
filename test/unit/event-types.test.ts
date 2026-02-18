@@ -1,21 +1,21 @@
 /**
  * Unit tests for event type definitions and Web Component event dispatching.
  *
- * Since the full DepthParallaxElement requires WebGL, video loading, and
+ * Since the full LayershiftElement requires WebGL, video loading, and
  * binary depth data, these tests validate the event type exports and the
  * emit() pattern in isolation.
  */
 
 import { describe, it, expect } from 'vitest';
 import type {
-  DepthParallaxEventMap,
-  DepthParallaxReadyDetail,
-  DepthParallaxPlayDetail,
-  DepthParallaxPauseDetail,
-  DepthParallaxLoopDetail,
-  DepthParallaxFrameDetail,
-  DepthParallaxErrorDetail,
-} from '../../src/components/depth-parallax/types';
+  LayershiftEventMap,
+  LayershiftReadyDetail,
+  LayershiftPlayDetail,
+  LayershiftPauseDetail,
+  LayershiftLoopDetail,
+  LayershiftFrameDetail,
+  LayershiftErrorDetail,
+} from '../../src/components/layershift/types';
 
 // ---------------------------------------------------------------------------
 // Type-level tests — these validate the type interfaces exist and are correct.
@@ -23,8 +23,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe('Event type definitions', () => {
-  it('DepthParallaxReadyDetail has correct shape', () => {
-    const detail: DepthParallaxReadyDetail = {
+  it('LayershiftReadyDetail has correct shape', () => {
+    const detail: LayershiftReadyDetail = {
       videoWidth: 1920,
       videoHeight: 1080,
       duration: 10.5,
@@ -34,23 +34,23 @@ describe('Event type definitions', () => {
     expect(detail.duration).toBe(10.5);
   });
 
-  it('DepthParallaxPlayDetail has correct shape', () => {
-    const detail: DepthParallaxPlayDetail = { currentTime: 2.5 };
+  it('LayershiftPlayDetail has correct shape', () => {
+    const detail: LayershiftPlayDetail = { currentTime: 2.5 };
     expect(detail.currentTime).toBe(2.5);
   });
 
-  it('DepthParallaxPauseDetail has correct shape', () => {
-    const detail: DepthParallaxPauseDetail = { currentTime: 3.0 };
+  it('LayershiftPauseDetail has correct shape', () => {
+    const detail: LayershiftPauseDetail = { currentTime: 3.0 };
     expect(detail.currentTime).toBe(3.0);
   });
 
-  it('DepthParallaxLoopDetail has correct shape', () => {
-    const detail: DepthParallaxLoopDetail = { loopCount: 3 };
+  it('LayershiftLoopDetail has correct shape', () => {
+    const detail: LayershiftLoopDetail = { loopCount: 3 };
     expect(detail.loopCount).toBe(3);
   });
 
-  it('DepthParallaxFrameDetail has correct shape', () => {
-    const detail: DepthParallaxFrameDetail = {
+  it('LayershiftFrameDetail has correct shape', () => {
+    const detail: LayershiftFrameDetail = {
       currentTime: 1.234,
       frameNumber: 42,
     };
@@ -58,21 +58,21 @@ describe('Event type definitions', () => {
     expect(detail.frameNumber).toBe(42);
   });
 
-  it('DepthParallaxErrorDetail has correct shape', () => {
-    const detail: DepthParallaxErrorDetail = { message: 'test error' };
+  it('LayershiftErrorDetail has correct shape', () => {
+    const detail: LayershiftErrorDetail = { message: 'test error' };
     expect(detail.message).toBe('test error');
   });
 
-  it('DepthParallaxEventMap contains all event names', () => {
+  it('LayershiftEventMap contains all event names', () => {
     // This is a compile-time check — if a key is missing, TS will error.
-    type EventNames = keyof DepthParallaxEventMap;
+    type EventNames = keyof LayershiftEventMap;
     const names: EventNames[] = [
-      'depth-parallax:ready',
-      'depth-parallax:play',
-      'depth-parallax:pause',
-      'depth-parallax:loop',
-      'depth-parallax:frame',
-      'depth-parallax:error',
+      'layershift-parallax:ready',
+      'layershift-parallax:play',
+      'layershift-parallax:pause',
+      'layershift-parallax:loop',
+      'layershift-parallax:frame',
+      'layershift-parallax:error',
     ];
     expect(names).toHaveLength(6);
   });
@@ -84,19 +84,19 @@ describe('Event type definitions', () => {
 
 describe('CustomEvent dispatching pattern', () => {
   it('creates a composed, bubbling CustomEvent with detail', () => {
-    const detail: DepthParallaxReadyDetail = {
+    const detail: LayershiftReadyDetail = {
       videoWidth: 1920,
       videoHeight: 1080,
       duration: 10.0,
     };
 
-    const event = new CustomEvent('depth-parallax:ready', {
+    const event = new CustomEvent('layershift-parallax:ready', {
       detail,
       bubbles: true,
       composed: true,
     });
 
-    expect(event.type).toBe('depth-parallax:ready');
+    expect(event.type).toBe('layershift-parallax:ready');
     expect(event.bubbles).toBe(true);
     expect(event.composed).toBe(true);
     expect(event.detail).toEqual(detail);
@@ -104,14 +104,14 @@ describe('CustomEvent dispatching pattern', () => {
 
   it('event listeners receive the correct detail', () => {
     const el = document.createElement('div');
-    let receivedDetail: DepthParallaxFrameDetail | null = null;
+    let receivedDetail: LayershiftFrameDetail | null = null;
 
-    el.addEventListener('depth-parallax:frame', ((e: CustomEvent<DepthParallaxFrameDetail>) => {
+    el.addEventListener('layershift-parallax:frame', ((e: CustomEvent<LayershiftFrameDetail>) => {
       receivedDetail = e.detail;
     }) as EventListener);
 
     el.dispatchEvent(
-      new CustomEvent('depth-parallax:frame', {
+      new CustomEvent('layershift-parallax:frame', {
         detail: { currentTime: 5.0, frameNumber: 150 },
         bubbles: true,
         composed: true,
@@ -128,12 +128,12 @@ describe('CustomEvent dispatching pattern', () => {
     document.body.appendChild(parent);
 
     let parentReceived = false;
-    parent.addEventListener('depth-parallax:play', () => {
+    parent.addEventListener('layershift-parallax:play', () => {
       parentReceived = true;
     });
 
     child.dispatchEvent(
-      new CustomEvent('depth-parallax:play', {
+      new CustomEvent('layershift-parallax:play', {
         detail: { currentTime: 0 },
         bubbles: true,
         composed: true,
@@ -148,12 +148,12 @@ describe('CustomEvent dispatching pattern', () => {
     const el = document.createElement('div');
     let errorMessage = '';
 
-    el.addEventListener('depth-parallax:error', ((e: CustomEvent<DepthParallaxErrorDetail>) => {
+    el.addEventListener('layershift-parallax:error', ((e: CustomEvent<LayershiftErrorDetail>) => {
       errorMessage = e.detail.message;
     }) as EventListener);
 
     el.dispatchEvent(
-      new CustomEvent('depth-parallax:error', {
+      new CustomEvent('layershift-parallax:error', {
         detail: { message: 'Failed to load video' },
         bubbles: true,
         composed: true,
@@ -167,14 +167,14 @@ describe('CustomEvent dispatching pattern', () => {
     const el = document.createElement('div');
     const loopCounts: number[] = [];
 
-    el.addEventListener('depth-parallax:loop', ((e: CustomEvent<DepthParallaxLoopDetail>) => {
+    el.addEventListener('layershift-parallax:loop', ((e: CustomEvent<LayershiftLoopDetail>) => {
       loopCounts.push(e.detail.loopCount);
     }) as EventListener);
 
     // Simulate 3 loops
     for (let i = 1; i <= 3; i++) {
       el.dispatchEvent(
-        new CustomEvent('depth-parallax:loop', {
+        new CustomEvent('layershift-parallax:loop', {
           detail: { loopCount: i },
           bubbles: true,
           composed: true,

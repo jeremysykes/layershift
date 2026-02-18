@@ -1,5 +1,5 @@
 /**
- * Application entry point — wires together the depth-aware parallax pipeline.
+ * Application entry point — wires together the Layershift parallax pipeline.
  *
  * ## Boot sequence
  *

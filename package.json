@@ -1,7 +1,7 @@
 {
-  "name": "depth-aware-parallax-video",
+  "name": "layershift",
   "version": "1.0.0",
-  "description": "Embeddable depth-aware parallax video Web Component",
+  "description": "Embeddable depth-aware parallax video Web Component by layershift.io",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,16 +16,16 @@
     "test:all": "vitest run && playwright test"
   },
   "exports": {
-    ".": "./src/components/depth-parallax/index.ts",
-    "./react": "./src/components/depth-parallax/wrappers/react.tsx",
-    "./vue": "./src/components/depth-parallax/wrappers/vue.vue",
-    "./svelte": "./src/components/depth-parallax/wrappers/Svelte.svelte",
-    "./angular": "./src/components/depth-parallax/wrappers/angular.ts",
-    "./types": "./src/components/depth-parallax/types.ts"
+    ".": "./src/components/layershift/index.ts",
+    "./react": "./src/components/layershift/wrappers/react.tsx",
+    "./vue": "./src/components/layershift/wrappers/vue.vue",
+    "./svelte": "./src/components/layershift/wrappers/Svelte.svelte",
+    "./angular": "./src/components/layershift/wrappers/angular.ts",
+    "./types": "./src/components/layershift/types.ts"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jeremysykes/depth-aware-parallax-video.git"
+    "url": "git+https://github.com/jeremysykes/layershift.git"
   },
   "keywords": [
     "parallax",
@@ -37,9 +37,9 @@
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/jeremysykes/depth-aware-parallax-video/issues"
+    "url": "https://github.com/jeremysykes/layershift/issues"
   },
-  "homepage": "https://github.com/jeremysykes/depth-aware-parallax-video#readme",
+  "homepage": "https://github.com/jeremysykes/layershift#readme",
   "dependencies": {
     "@types/three": "^0.182.0",
     "three": "^0.182.0"

@@ -1,5 +1,5 @@
 /**
- * Application-wide configuration for the depth-aware parallax video pipeline.
+ * Application-wide configuration for the Layershift parallax video pipeline.
  *
  * The parallax effect works by displacing UV coordinates in a fragment shader
  * based on a per-pixel depth map. The video is rendered at native display

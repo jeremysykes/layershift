@@ -159,7 +159,7 @@ describe('onVideoFrame callback contract', () => {
     // RVFC fires → renderer calls onVideoFrame → component dispatches event
     const events: Array<{ currentTime: number; frameNumber: number }> = [];
 
-    // This mimics what DepthParallaxElement does with the callback
+    // This mimics what LayershiftElement does with the callback
     const onVideoFrame = (currentTime: number, frameNumber: number) => {
       events.push({ currentTime, frameNumber });
     };
