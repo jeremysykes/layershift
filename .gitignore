@@ -7,4 +7,5 @@ test-results
 .DS_Store
 *.log
 .vercel
-.claude
+.claude/worktrees/
+.claude/settings.local.json

@@ -1,0 +1,27 @@
+# Source and dev files (not needed in published package)
+src/
+scripts/
+docs/
+raw/
+output/
+test-results/
+public/
+
+# Config files
+vite.config.ts
+vite.config.component.ts
+vite.config.npm.ts
+tsconfig.json
+tsconfig.declarations.json
+vitest.config.ts
+playwright.config.ts
+vercel.json
+
+# Dev / CI
+.vercel/
+.claude/
+.github/
+.DS_Store
+*.log
+
+# Only ship dist/ and package metadata

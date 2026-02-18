@@ -1,27 +1,44 @@
 {
   "name": "layershift",
-  "version": "1.0.0",
-  "description": "Embeddable depth-aware parallax video Web Component by layershift.io",
+  "version": "0.1.0",
+  "description": "Embeddable video effects as Web Components. Drop-in parallax, depth-aware motion, and more.",
   "type": "module",
+  "main": "dist/components/layershift.js",
+  "module": "dist/npm/layershift.es.js",
+  "types": "dist/types/components/layershift/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/components/layershift/index.d.ts",
+      "import": "./dist/npm/layershift.es.js",
+      "require": "./dist/components/layershift.js"
+    },
+    "./global": {
+      "types": "./dist/types/components/layershift/global.d.ts"
+    }
+  },
+  "files": [
+    "dist/npm/layershift.es.js",
+    "dist/components/layershift.js",
+    "dist/types/",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": true,
   "scripts": {
     "dev": "vite",
     "precompute": "npx tsx scripts/precompute-depth.ts",
     "build": "tsc && vite build",
     "build:component": "vite build --config vite.config.component.ts",
+    "build:npm": "vite build --config vite.config.npm.ts",
+    "build:types": "tsc -p tsconfig.declarations.json && cp src/components/layershift/global.d.ts dist/types/components/layershift/global.d.ts",
+    "build:package": "npm run build:component && npm run build:npm && npm run build:types",
+    "prepublishOnly": "npm run build:package",
     "package": "npx tsx scripts/package-output.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:all": "vitest run && playwright test"
-  },
-  "exports": {
-    ".": "./src/components/layershift/index.ts",
-    "./react": "./src/components/layershift/wrappers/react.tsx",
-    "./vue": "./src/components/layershift/wrappers/vue.vue",
-    "./svelte": "./src/components/layershift/wrappers/Svelte.svelte",
-    "./angular": "./src/components/layershift/wrappers/angular.ts",
-    "./types": "./src/components/layershift/types.ts"
   },
   "repository": {
     "type": "git",
@@ -32,14 +49,17 @@
     "video",
     "depth",
     "web-component",
-    "three.js"
+    "three.js",
+    "webgl",
+    "depth-map",
+    "3d-effect"
   ],
-  "author": "",
+  "author": "Jeremy Sykes",
   "license": "BUSL-1.1",
   "bugs": {
     "url": "https://github.com/jeremysykes/layershift/issues"
   },
-  "homepage": "https://github.com/jeremysykes/layershift#readme",
+  "homepage": "https://layershift.io",
   "dependencies": {
     "@types/three": "^0.182.0",
     "three": "^0.182.0"
