@@ -505,6 +505,11 @@ export class ParallaxRenderer {
 
     gl.clearColor(0, 0, 0, 1);
 
+    // Both video and depth textures need Y-flip (HTML/image data is top-to-bottom,
+    // WebGL textures are bottom-to-top). Set once here instead of toggling per-frame,
+    // which avoids pixel storage state changes that stall mobile GPU pipelines.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
     this.container.appendChild(this.canvas);
     this.initGPUResources();
     this.setupResizeHandling();
@@ -776,14 +781,10 @@ export class ParallaxRenderer {
     gl.useProgram(this.program);
 
     // Upload the current video frame to the GPU.
-    // Flip Y: HTMLVideoElement pixel data is top-to-bottom, but WebGL
-    // textures load bottom-to-top. Three.js VideoTexture handled this
-    // automatically; with raw WebGL we must set it explicitly.
+    // Y-flip is handled globally (UNPACK_FLIP_Y_WEBGL set once in constructor).
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
     // Fallback: when RVFC is not supported, do depth update here.
     if (!this.rvfcSupported) {
@@ -811,8 +812,7 @@ export class ParallaxRenderer {
     const depthData = this.readDepth(timeSec);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.depthTexture);
-    // Flip Y: WebGL textures load bottom-to-top, but our depth data is top-to-bottom.
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    // Y-flip is handled globally (UNPACK_FLIP_Y_WEBGL set once in constructor).
     gl.texSubImage2D(
       gl.TEXTURE_2D, 0,
       0, 0,
@@ -820,7 +820,6 @@ export class ParallaxRenderer {
       gl.RED, gl.UNSIGNED_BYTE,
       depthData
     );
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   }
 
   // -----------------------------------------------------------------------
@@ -943,6 +942,7 @@ export class ParallaxRenderer {
     if (!gl) return;
     this.gl = gl;
     gl.clearColor(0, 0, 0, 1);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
     this.initGPUResources();
 
