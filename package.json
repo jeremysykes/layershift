@@ -49,8 +49,8 @@
     "video",
     "depth",
     "web-component",
-    "three.js",
     "webgl",
+    "webgl2",
     "depth-map",
     "3d-effect"
   ],
@@ -60,10 +60,7 @@
     "url": "https://github.com/jeremysykes/layershift/issues"
   },
   "homepage": "https://layershift.io",
-  "dependencies": {
-    "@types/three": "^0.182.0",
-    "three": "^0.182.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@vitest/browser": "^4.0.18",

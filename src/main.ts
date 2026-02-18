@@ -8,7 +8,7 @@
  * 3. Create a DepthFrameInterpolator to smoothly sample between the
  *    5fps precomputed depth keyframes at any playback time.
  * 4. Initialize the ParallaxRenderer with derived config, the video
- *    element (for VideoTexture), and the depth map dimensions.
+ *    element (for video texture), and the depth map dimensions.
  * 5. Start the render loop: each frame, the renderer asks the
  *    interpolator for the current depth map and the InputHandler
  *    for the current mouse/gyro offset, then the GPU shader does

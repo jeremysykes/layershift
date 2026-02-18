@@ -2,7 +2,7 @@
  * <layershift-parallax> Web Component
  *
  * A self-contained Custom Element that renders a depth-aware parallax
- * video effect. Encapsulates the entire Three.js pipeline inside a
+ * video effect. Encapsulates the entire WebGL pipeline inside a
  * Shadow DOM — consumers just drop in the tag and provide asset URLs.
  *
  * Usage:

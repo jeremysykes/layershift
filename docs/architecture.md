@@ -2,7 +2,7 @@
 
 ## Overview
 
-Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via Three.js. Effects are embeddable in any framework or plain HTML as a single IIFE bundle.
+Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via WebGL 2. Effects are embeddable in any framework or plain HTML as a single IIFE bundle with zero runtime dependencies.
 
 **Parallax** (`<layershift-parallax>`) is the first effect — depth-aware parallax motion driven by mouse or gyroscope input using precomputed depth maps. Future effects will share the same core infrastructure (input handling, video loading, depth system, build pipeline).
 
@@ -32,7 +32,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 
 | File | Scope | Purpose |
 |------|-------|---------|
-| `parallax-renderer.ts` | Parallax | Three.js scene, GLSL shaders, render loops |
+| `parallax-renderer.ts` | Parallax | WebGL 2 renderer, GLSL shaders, render loops |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
 | `depth-worker.ts` | Shared | Web Worker for bilateral filter + interpolation |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, interpolation |
@@ -172,7 +172,7 @@ See `docs/diagrams/build-system.md` for the build flow diagram.
 
 ### Component Build (vite.config.component.ts)
 
-Produces a single IIFE file with all dependencies bundled. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` element.
+Produces a single IIFE file with zero runtime dependencies. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` element.
 
 ## Performance Characteristics
 
@@ -183,8 +183,8 @@ Produces a single IIFE file with all dependencies bundled. No separate asset loa
 | Render draw calls per frame | 1 |
 | Depth texture upload frequency | ~5fps (keyframe rate) |
 | Depth texture size | 512x512 Uint8 (~256KB) |
-| Bundle size (gzipped) | ~100KB |
-| Runtime dependencies | Three.js (bundled) |
+| Bundle size (gzipped) | ~40KB |
+| Runtime dependencies | None (pure WebGL 2) |
 
 ## Documentation Map
 
@@ -201,7 +201,8 @@ Produces a single IIFE file with all dependencies bundled. No separate asset loa
 | `docs/diagrams/build-system.md` | Build targets + packaging flow |
 | **Decisions** | |
 | `docs/adr/ADR-001-*.md` | Depth-derived parallax parameter tuning |
-| `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (Three.js, no higher-level engines) |
+| `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (superseded by ADR-004) |
+| `docs/adr/ADR-004-*.md` | Three.js to pure WebGL 2 migration |
 | `docs/adr/ADR-003-*.md` | Staging via Vercel preview deployments |
 | **Parallax Effect** | |
 | `docs/parallax/depth-derivation-rules.md` | Inviolable derivation system rules |

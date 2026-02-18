@@ -3,7 +3,7 @@
  *
  * The parallax effect works by displacing UV coordinates in a fragment shader
  * based on a per-pixel depth map. The video is rendered at native display
- * resolution via THREE.VideoTexture, while a precomputed depth map (512x512)
+ * resolution via a WebGL video texture, while a precomputed depth map (512x512)
  * drives the displacement.
  *
  * Two rendering modes are available:
