@@ -123,6 +123,21 @@ const FRAGMENT_SHADER = /* glsl */ `
   /** Number of ray-march steps for POM (runtime-adjustable). */
   uniform int uPomSteps;
 
+  /** Smoothstep lower bound for depth contrast curve (depth-adaptive). */
+  uniform float uContrastLow;
+
+  /** Smoothstep upper bound for depth contrast curve (depth-adaptive). */
+  uniform float uContrastHigh;
+
+  /** Y-axis displacement multiplier (depth-adaptive). */
+  uniform float uVerticalReduction;
+
+  /** Depth threshold where DOF blur ramp begins (depth-adaptive). */
+  uniform float uDofStart;
+
+  /** Maximum DOF blur blend factor (depth-adaptive). */
+  uniform float uDofStrength;
+
   /**
    * Texel size for video/image texture (1.0 / videoResolution).
    * Used by the depth-of-field effect to sample neighboring pixels.
@@ -198,7 +213,8 @@ const FRAGMENT_SHADER = /* glsl */ `
 
     // Contrast curve: pushes mid-tones toward 0 or 1, reducing
     // noisy mid-depth artifacts while keeping the near/far split clean.
-    depth = smoothstep(0.05, 0.95, depth);
+    // Bounds are depth-adaptive (derived from the scene's depth distribution).
+    depth = smoothstep(uContrastLow, uContrastHigh, depth);
 
     // Invert: near (0) → max displacement, far (1) → no displacement
     float displacement = (1.0 - depth) * uStrength;
@@ -206,11 +222,12 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Reduce displacement near edges to prevent border stretching
     displacement *= edgeFade(uv);
 
-    // Apply offset with reduced vertical component (0.5x).
+    // Apply offset with reduced vertical component.
     // Horizontal parallax is the primary depth cue — vertical
     // parallax at full strength looks like floating/swimming.
+    // Reduction factor is depth-adaptive.
     vec2 offset = uOffset * displacement;
-    offset.y *= 0.5;
+    offset.y *= uVerticalReduction;
 
     return uv + offset;
   }
@@ -241,9 +258,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     // How much accumulated depth increases per step
     float layerDepth = 1.0 / float(uPomSteps);
 
-    // Apply reduced vertical component for POM offset too
+    // Apply reduced vertical component for POM offset too.
+    // Reduction factor is depth-adaptive.
     vec2 scaledOffset = uOffset;
-    scaledOffset.y *= 0.5;
+    scaledOffset.y *= uVerticalReduction;
 
     // UV step per layer — total displacement spread across all steps
     vec2 deltaUV = scaledOffset * uStrength / float(uPomSteps);
@@ -262,7 +280,7 @@ const FRAGMENT_SHADER = /* glsl */ `
 
       // Single texture read per step — depth is pre-filtered on the CPU
       float rawDepth = texture2D(uDepth, currentUV).r;
-      rawDepth = smoothstep(0.05, 0.95, rawDepth);
+      rawDepth = smoothstep(uContrastLow, uContrastHigh, rawDepth);
       float depthAtUV = 1.0 - rawDepth;
 
       // Has the ray crossed below the depth surface?
@@ -271,7 +289,7 @@ const FRAGMENT_SHADER = /* glsl */ `
         vec2 prevUV = currentUV - deltaUV;
         float prevLayerDepth = currentLayerDepth - layerDepth;
         float prevRaw = texture2D(uDepth, prevUV).r;
-        prevRaw = smoothstep(0.05, 0.95, prevRaw);
+        prevRaw = smoothstep(uContrastLow, uContrastHigh, prevRaw);
         float prevDepthAtUV = 1.0 - prevRaw;
 
         // Linear interpolation between the two bracketing samples.
@@ -316,14 +334,14 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Unconditional to avoid GPU warp divergence on mobile GPUs —
     // mix(color, blurred, 0.0) returns color unchanged for near pixels.
     float dofDepth = texture2D(uDepth, displaced).r;
-    float dofStrength = smoothstep(0.6, 1.0, dofDepth) * 0.4;
+    float dof = smoothstep(uDofStart, 1.0, dofDepth) * uDofStrength;
     vec4 blurred = (
       texture2D(uImage, displaced + vec2( uImageTexelSize.x,  0.0)) +
       texture2D(uImage, displaced + vec2(-uImageTexelSize.x,  0.0)) +
       texture2D(uImage, displaced + vec2( 0.0,  uImageTexelSize.y)) +
       texture2D(uImage, displaced + vec2( 0.0, -uImageTexelSize.y))
     ) * 0.25;
-    color = mix(color, blurred, dofStrength);
+    color = mix(color, blurred, dof);
 
     // --- Vignette ---
     // Apply subtle edge/corner darkening using the original (undisplaced)
@@ -344,7 +362,43 @@ export interface ParallaxRendererConfig {
   pomEnabled: boolean;
   pomSteps: number;
   overscanPadding: number;
+
+  /**
+   * Depth-adaptive shader parameters.
+   * When omitted, calibrated defaults matching the current hardcoded values
+   * are used. When provided, the explicit value overrides the derived value.
+   */
+  contrastLow?: number;
+  contrastHigh?: number;
+  verticalReduction?: number;
+  dofStart?: number;
+  dofStrength?: number;
 }
+
+/**
+ * Resolved config with all optional fields filled. Internal only.
+ * Defaults match the exact current hardcoded production values.
+ */
+interface ResolvedParallaxRendererConfig {
+  parallaxStrength: number;
+  pomEnabled: boolean;
+  pomSteps: number;
+  overscanPadding: number;
+  contrastLow: number;
+  contrastHigh: number;
+  verticalReduction: number;
+  dofStart: number;
+  dofStrength: number;
+}
+
+/** Calibrated defaults for the 5 new shader parameters. */
+const SHADER_PARAM_DEFAULTS = {
+  contrastLow: 0.05,
+  contrastHigh: 0.95,
+  verticalReduction: 0.5,
+  dofStart: 0.6,
+  dofStrength: 0.4,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Renderer class
@@ -401,12 +455,29 @@ export class ParallaxRenderer {
    * @param parent - The container element that the WebGL canvas is
    *   appended to. The renderer sizes itself to fill this element.
    * @param config - Parallax-specific settings (strength, POM, overscan).
+   *   Optional shader parameters are merged with calibrated defaults.
    */
+  /** Resolved config with all optional shader params filled from defaults. */
+  private readonly config: ResolvedParallaxRendererConfig;
+
   constructor(
     parent: HTMLElement,
-    private readonly config: ParallaxRendererConfig
+    config: ParallaxRendererConfig
   ) {
     this.container = parent;
+
+    // Merge explicit config with calibrated defaults for optional shader params.
+    this.config = {
+      parallaxStrength: config.parallaxStrength,
+      pomEnabled: config.pomEnabled,
+      pomSteps: config.pomSteps,
+      overscanPadding: config.overscanPadding,
+      contrastLow: config.contrastLow ?? SHADER_PARAM_DEFAULTS.contrastLow,
+      contrastHigh: config.contrastHigh ?? SHADER_PARAM_DEFAULTS.contrastHigh,
+      verticalReduction: config.verticalReduction ?? SHADER_PARAM_DEFAULTS.verticalReduction,
+      dofStart: config.dofStart ?? SHADER_PARAM_DEFAULTS.dofStart,
+      dofStrength: config.dofStrength ?? SHADER_PARAM_DEFAULTS.dofStrength,
+    };
 
     // Create the WebGL renderer with standard settings.
     // antialias smooths geometry edges (minimal cost for a single plane).
@@ -487,6 +558,12 @@ export class ParallaxRenderer {
         uPomEnabled: { value: this.config.pomEnabled },
         uPomSteps: { value: this.config.pomSteps },
         uImageTexelSize: { value: new THREE.Vector2(1.0 / video.videoWidth, 1.0 / video.videoHeight) },
+        // Depth-adaptive shader parameters (set once, never updated per-frame).
+        uContrastLow: { value: this.config.contrastLow },
+        uContrastHigh: { value: this.config.contrastHigh },
+        uVerticalReduction: { value: this.config.verticalReduction },
+        uDofStart: { value: this.config.dofStart },
+        uDofStrength: { value: this.config.dofStrength },
       },
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,

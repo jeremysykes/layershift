@@ -23,6 +23,10 @@ export interface LayershiftReadyDetail {
   videoWidth: number;
   videoHeight: number;
   duration: number;
+  /** Depth analysis profile (present when depth data was analyzed). */
+  depthProfile?: import('../../depth-analysis').DepthProfile;
+  /** Parameters derived from depth analysis (present when depth data was analyzed). */
+  derivedParams?: import('../../depth-analysis').DerivedParallaxParams;
 }
 
 /** Fired when video starts playing. */

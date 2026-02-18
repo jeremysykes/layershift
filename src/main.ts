@@ -4,28 +4,22 @@
  * ## Boot sequence
  *
  * 1. Load the <video> element and precomputed depth data in parallel.
- * 2. Create a DepthFrameInterpolator to smoothly sample between the
+ * 2. Analyze the depth data to derive per-video parallax parameters.
+ * 3. Create a DepthFrameInterpolator to smoothly sample between the
  *    5fps precomputed depth keyframes at any playback time.
- * 3. Initialize the ParallaxRenderer with the video element (for
- *    VideoTexture) and the depth map dimensions.
- * 4. Start the render loop: each frame, the renderer asks the
+ * 4. Initialize the ParallaxRenderer with derived config, the video
+ *    element (for VideoTexture), and the depth map dimensions.
+ * 5. Start the render loop: each frame, the renderer asks the
  *    interpolator for the current depth map and the InputHandler
  *    for the current mouse/gyro offset, then the GPU shader does
  *    per-pixel UV displacement.
- * 5. Register spacebar for play/pause and (on mobile) show a motion
+ * 6. Register spacebar for play/pause and (on mobile) show a motion
  *    permission button.
- *
- * ## What changed from the old layer-based system
- *
- * - No more canvas getImageData / createVideoFrameSampler — the GPU
- *   samples the video at native resolution via THREE.VideoTexture.
- * - No more decomposeFrameToLayers — depth is used continuously in
- *   the fragment shader instead of being quantized into 5 layers.
- * - The renderer receives a depth callback instead of a layer callback.
  */
 
 import './style.css';
 import { APP_CONFIG } from './config';
+import { analyzeDepthFrames, deriveParallaxParams } from './depth-analysis';
 import { InputHandler } from './input-handler';
 import { ParallaxRenderer } from './parallax-renderer';
 import {
@@ -49,13 +43,9 @@ if (!app) {
 const ui = new UIController(app);
 const input = new InputHandler(APP_CONFIG.motionLerpFactor);
 
-// The renderer now takes a config object instead of individual layer params.
-const renderer = new ParallaxRenderer(app, {
-  parallaxStrength: APP_CONFIG.parallaxStrength,
-  pomEnabled: APP_CONFIG.pomEnabled,
-  pomSteps: APP_CONFIG.pomSteps,
-  overscanPadding: APP_CONFIG.overscanPadding,
-});
+// Renderer is created inside bootstrap() after depth analysis determines
+// the optimal config. Declared here so it's accessible for cleanup.
+let renderer: ParallaxRenderer | null = null;
 
 void bootstrap().catch((error: unknown) => {
   const message =
@@ -83,6 +73,30 @@ async function bootstrap(): Promise<void> {
   );
 
   const [video, depthData] = await Promise.all([videoPromise, depthDataPromise]);
+
+  // Analyze depth data and derive optimal parallax parameters.
+  // Runs once, synchronous, <5ms. Falls back to calibrated defaults
+  // if the depth data is degenerate.
+  const depthProfile = analyzeDepthFrames(
+    depthData.frames,
+    depthData.meta.width,
+    depthData.meta.height,
+  );
+  const derivedParams = deriveParallaxParams(depthProfile);
+
+  // Create the renderer with depth-derived parameters.
+  // APP_CONFIG.pomEnabled remains the explicit toggle for POM on/off.
+  renderer = new ParallaxRenderer(app!, {
+    parallaxStrength: derivedParams.parallaxStrength,
+    pomEnabled: APP_CONFIG.pomEnabled,
+    pomSteps: derivedParams.pomSteps,
+    overscanPadding: derivedParams.overscanPadding,
+    contrastLow: derivedParams.contrastLow,
+    contrastHigh: derivedParams.contrastHigh,
+    verticalReduction: derivedParams.verticalReduction,
+    dofStart: derivedParams.dofStart,
+    dofStrength: derivedParams.dofStrength,
+  });
 
   // Create depth interpolator — try Web Worker first for smooth playback
   // (bilateral filter off main thread), fall back to synchronous if
@@ -126,7 +140,7 @@ async function bootstrap(): Promise<void> {
   configureMotionPermissionFlow();
 
   window.addEventListener('beforeunload', () => {
-    renderer.dispose();
+    renderer?.dispose();
     input.dispose();
     workerInterpolator?.dispose();
     video.remove();

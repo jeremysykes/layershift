@@ -13,13 +13,13 @@
  *   ></layershift-parallax>
  */
 
-import * as THREE from 'three';
 import {
   type PrecomputedDepthData,
   DepthFrameInterpolator,
   WorkerDepthInterpolator,
   loadPrecomputedDepth,
 } from '../../precomputed-depth';
+import { analyzeDepthFrames, deriveParallaxParams } from '../../depth-analysis';
 import { ParallaxRenderer } from '../../parallax-renderer';
 import type { ParallaxInput } from '../../input-handler';
 import type {
@@ -335,10 +335,24 @@ export class LayershiftElement extends HTMLElement {
       this.loopCount = 0;
       this.attachVideoEventListeners(video);
 
-      // Compute parallax strength from pixel-based attributes.
-      // parallaxMax is the max pixel offset for nearest objects.
-      // Convert to UV-space fraction based on the video width.
-      const parallaxStrength = this.parallaxMax / Math.max(video.videoWidth, 1);
+      // Analyze depth data and derive optimal parallax parameters.
+      // Runs once, synchronous, <5ms.
+      const depthProfile = analyzeDepthFrames(
+        depthData.frames,
+        depthData.meta.width,
+        depthData.meta.height,
+      );
+      const derivedParams = deriveParallaxParams(depthProfile);
+
+      // Override precedence: explicit attributes > derived > calibrated defaults.
+      // hasAttribute() distinguishes "user explicitly set it" from "using fallback".
+      const parallaxStrength = this.hasAttribute('parallax-max')
+        ? this.parallaxMax / Math.max(video.videoWidth, 1)
+        : derivedParams.parallaxStrength;
+
+      const overscanPadding = this.hasAttribute('overscan')
+        ? this.overscan
+        : derivedParams.overscanPadding;
 
       // Create depth interpolator — try Web Worker first for smooth playback,
       // fall back to synchronous if Workers aren't available (e.g. file:// or CSP).
@@ -369,12 +383,17 @@ export class LayershiftElement extends HTMLElement {
         return;
       }
 
-      // Create renderer inside our shadow DOM container
+      // Create renderer with merged config: explicit overrides > derived > defaults.
       this.renderer = new ParallaxRenderer(this.container!, {
         parallaxStrength,
         pomEnabled: true,
-        pomSteps: 16,
-        overscanPadding: this.overscan,
+        pomSteps: derivedParams.pomSteps,
+        overscanPadding,
+        contrastLow: derivedParams.contrastLow,
+        contrastHigh: derivedParams.contrastHigh,
+        verticalReduction: derivedParams.verticalReduction,
+        dofStart: derivedParams.dofStart,
+        dofStrength: derivedParams.dofStrength,
       });
 
       this.renderer.initialize(video, depthData.meta.width, depthData.meta.height);
@@ -421,6 +440,8 @@ export class LayershiftElement extends HTMLElement {
         videoWidth: video.videoWidth,
         videoHeight: video.videoHeight,
         duration: video.duration,
+        depthProfile,
+        derivedParams,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to initialize.';
