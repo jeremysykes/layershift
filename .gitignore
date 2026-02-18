@@ -1,8 +1,10 @@
 node_modules
 dist
 output
+raw
+test-results
+
 .DS_Store
 *.log
-.claude/worktrees
 .vercel
-raw
+.claude

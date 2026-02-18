@@ -1,13 +1,17 @@
-# layershift
+# Layershift
 
-Embeddable depth-aware parallax video effect as a Web Component. A precomputed depth map drives per-pixel UV displacement with Parallax Occlusion Mapping (POM), so near objects move more than far objects — creating a convincing 3D effect from a single 2D video.
+Embeddable video effects as Web Components. One script tag, one custom element — works in plain HTML, React, Vue, Svelte, Angular, WordPress, and anywhere else.
 
-One script tag. One custom element. Works in plain HTML, React, Vue, Svelte, Angular, WordPress — anywhere.
+Layershift is a growing collection of visual effects that turn flat video into something interactive. Each effect ships as its own custom element under the `layershift-*` namespace.
 
-## Quick Start
+## Effects
+
+### `<layershift-parallax>` — Depth-Aware Parallax Video
+
+A precomputed depth map drives per-pixel UV displacement with Parallax Occlusion Mapping (POM), so near objects move more than far objects — creating a convincing 3D effect from a single 2D video.
 
 ```html
-<script src="https://yourdomain.com/components/layershift.js"></script>
+<script src="https://cdn.layershift.io/layershift.js"></script>
 
 <layershift-parallax
   src="video.mp4"
@@ -15,6 +19,10 @@ One script tag. One custom element. Works in plain HTML, React, Vue, Svelte, Ang
   depth-meta="depth-meta.json"
 ></layershift-parallax>
 ```
+
+**[Live demo →](https://layershift.io)**
+
+---
 
 ## Prerequisites
 
@@ -36,7 +44,7 @@ npm install
 npm run precompute
 ```
 
-This generates `public/depth-data.bin` and `public/depth-meta.json`.
+Generates `public/depth-data.bin` and `public/depth-meta.json` from the video in `public/sample.mp4`.
 
 ## Development
 
@@ -57,7 +65,11 @@ npm run build:component
 npm run package
 ```
 
-## Configuration
+---
+
+## `<layershift-parallax>` Reference
+
+### Configuration
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -72,9 +84,7 @@ npm run package
 | `loop` | boolean | true | Loop playback |
 | `muted` | boolean | true | Muted (required for autoplay) |
 
-## Framework Wrappers
-
-Thin convenience wrappers for idiomatic usage:
+### Framework Wrappers
 
 ```js
 // React
@@ -94,9 +104,9 @@ import { LayershiftComponent } from 'layershift/angular'
 
 **Angular note:** Add `CUSTOM_ELEMENTS_SCHEMA` to your module or component schemas.
 
-## Events
+### Events
 
-The `<layershift-parallax>` element dispatches custom events that bubble through the DOM (including Shadow DOM). Listen on the element or any ancestor:
+The `<layershift-parallax>` element dispatches custom events that bubble through the DOM (including Shadow DOM):
 
 | Event | Detail | When |
 |-------|--------|------|
@@ -115,21 +125,20 @@ el.addEventListener('layershift-parallax:ready', (e) => {
 });
 
 el.addEventListener('layershift-parallax:frame', (e) => {
-  // Sync external UI to video frames
   updateTimeline(e.detail.currentTime);
 });
 ```
 
-### Frame-level sync with `requestVideoFrameCallback`
+### Frame-Level Sync
 
-The renderer uses `requestVideoFrameCallback` (RVFC) when available to sync depth updates to actual video frame presentation. This means:
+The renderer uses `requestVideoFrameCallback` (RVFC) when available to sync depth updates to actual video frame presentation:
 
-- Depth work only runs when a new video frame is decoded (~24-30fps)
-- Parallax input stays smooth at display refresh rate (60-120fps)
-- The `layershift-parallax:frame` event fires at true video frame rate, not animation frame rate
-- Browsers without RVFC fall back to the standard `requestAnimationFrame` loop automatically
+- Depth work only runs when a new frame is decoded (~24–30fps)
+- Parallax input stays smooth at display refresh rate (60–120fps)
+- The `layershift-parallax:frame` event fires at true video frame rate
+- Browsers without RVFC fall back to `requestAnimationFrame` automatically
 
-## Performance
+### Performance
 
 Each `<layershift-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden `<video>` element, and 2 GPU textures (1 draw call per frame). The bilateral filter runs entirely off the main thread.
 
@@ -139,9 +148,9 @@ Each `<layershift-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 
 | **4–6** | Great on desktop; mobile may hit browser video decoder limits |
 | **8–12** | Desktop only; consider pausing off-screen instances |
 
-**The bottleneck is concurrent video decoders**, not GPU or Workers. Most mobile browsers cap hardware-decoded `<video>` streams at 4–8. For scroll-based galleries with many instances, mount/unmount or pause off-screen elements to stay within limits.
+The bottleneck is concurrent video decoders, not GPU or Workers. Most mobile browsers cap hardware-decoded `<video>` streams at 4–8.
 
-### Per-instance resource footprint (512×512 depth)
+#### Per-Instance Resource Footprint (512x512 depth)
 
 | Resource | Cost |
 |----------|------|
@@ -149,19 +158,15 @@ Each `<layershift-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 
 | Draw calls / frame | 1 |
 | Web Workers | 1 (with sync fallback) |
 | Worker RAM | ~3 MB (processing buffers) |
-| Depth data download | ~13 MB (50 frames at 512×512) |
+| Depth data download | ~13 MB (50 frames at 512x512) |
 | RAF callbacks | 1 (60–120 fps) |
 | RVFC callbacks | 1 (24–30 fps, when supported) |
 
+---
+
 ## Controls
 
-### Standalone demo
-
 - **Space** — Play / pause video
-
-### Web Component
-
-Video plays automatically by default. Control via the `autoplay` attribute or the video element's native API through events.
 
 ## Testing
 
@@ -175,3 +180,15 @@ npm run build && npm run build:component && npm run test:e2e
 # All tests
 npm run build && npm run build:component && npm run test:all
 ```
+
+## Roadmap
+
+Future effects under the Layershift umbrella:
+
+- `<layershift-scroll>` — Scroll-driven video playback
+- `<layershift-reveal>` — Depth-based reveal/mask transitions
+- More to come
+
+## License
+
+MIT
