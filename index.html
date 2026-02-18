@@ -297,6 +297,41 @@ el.addEventListener(<span class="string">'depth-parallax:frame'</span>, (e) =&gt
   updateTimeline(e.detail.currentTime);
 });</code></div>
 
+          <!-- Performance -->
+          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Performance</h3>
+          <p>
+            Each instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden &lt;video&gt; element,
+            and 2 GPU textures. The bilateral filter runs entirely off the main thread.
+          </p>
+
+          <table class="config-table">
+            <thead>
+              <tr>
+                <th>Instances</th>
+                <th>Suitability</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1&ndash;3</strong></td>
+                <td>Smooth on all modern devices including mobile</td>
+              </tr>
+              <tr>
+                <td><strong>4&ndash;6</strong></td>
+                <td>Great on desktop; mobile may hit browser video decoder limits</td>
+              </tr>
+              <tr>
+                <td><strong>8&ndash;12</strong></td>
+                <td>Desktop only; consider pausing off-screen instances</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p>
+            The bottleneck is concurrent video decoders, not GPU or Workers. For scroll-based
+            galleries, pause or unmount off-screen instances to stay within browser limits.
+          </p>
+
           <!-- Prepare your video -->
           <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Prepare your video</h3>
           <p>

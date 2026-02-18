@@ -129,6 +129,30 @@ The renderer uses `requestVideoFrameCallback` (RVFC) when available to sync dept
 - The `depth-parallax:frame` event fires at true video frame rate, not animation frame rate
 - Browsers without RVFC fall back to the standard `requestAnimationFrame` loop automatically
 
+## Performance
+
+Each `<depth-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden `<video>` element, and 2 GPU textures (1 draw call per frame). The bilateral filter runs entirely off the main thread.
+
+| Instances | Suitability |
+|-----------|-------------|
+| **1–3** | Smooth on all modern devices including mobile |
+| **4–6** | Great on desktop; mobile may hit browser video decoder limits |
+| **8–12** | Desktop only; consider pausing off-screen instances |
+
+**The bottleneck is concurrent video decoders**, not GPU or Workers. Most mobile browsers cap hardware-decoded `<video>` streams at 4–8. For scroll-based galleries with many instances, mount/unmount or pause off-screen elements to stay within limits.
+
+### Per-instance resource footprint (512×512 depth)
+
+| Resource | Cost |
+|----------|------|
+| GPU textures | 2 (VideoTexture + 262 KB depth DataTexture) |
+| Draw calls / frame | 1 |
+| Web Workers | 1 (with sync fallback) |
+| Worker RAM | ~3 MB (processing buffers) |
+| Depth data download | ~13 MB (50 frames at 512×512) |
+| RAF callbacks | 1 (60–120 fps) |
+| RVFC callbacks | 1 (24–30 fps, when supported) |
+
 ## Controls
 
 ### Standalone demo
