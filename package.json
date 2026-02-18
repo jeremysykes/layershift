@@ -1,6 +1,6 @@
 {
   "name": "layershift",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Embeddable video effects as Web Components. Drop-in parallax, depth-aware motion, and more.",
   "type": "module",
   "main": "dist/components/layershift.js",
