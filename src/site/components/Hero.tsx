@@ -8,11 +8,13 @@ import { LayershiftEffect } from './LayershiftEffect';
 import { EffectErrorBoundary } from './EffectErrorBoundary';
 import { Skeleton } from './ui/skeleton';
 import { Wordmark } from './Wordmark';
+import { HeroCta } from './HeroCta';
 import { ScrollHint } from './ScrollHint';
 
 export function Hero() {
   const heroRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
   const scrollHintRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
 
@@ -21,7 +23,7 @@ export function Hero() {
   const content = getEffectContent(activeEffect);
   const { heroVideo } = useVideoAssignment(videos, activeEffect);
 
-  useHeroScroll(heroRef, wordmarkRef, scrollHintRef);
+  useHeroScroll(heroRef, wordmarkRef, scrollHintRef, ctaRef);
 
   const heroAttrs = useMemo(() => {
     if (!content) return {};
@@ -65,6 +67,7 @@ export function Hero() {
           )}
         />
       </div>
+      <HeroCta ref={ctaRef} />
       <ScrollHint ref={scrollHintRef} />
     </>
   );
