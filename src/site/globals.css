@@ -117,6 +117,32 @@ layershift-portal:not(:defined) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Loading skeleton shimmer                                            */
+/* ------------------------------------------------------------------ */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #111 25%,
+    #1a1a1a 37%,
+    #111 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.skeleton-fade-out {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
 /* Syntax highlighting — One Dark theme                                */
 /* ------------------------------------------------------------------ */
 
@@ -126,12 +152,90 @@ layershift-portal:not(:defined) {
 .code-highlight .attr    { color: #d19a66; }
 .code-highlight .string  { color: #98c379; }
 
+/* Copy button — CSS hover replaces JS onMouseEnter/Leave */
+.copy-btn:hover {
+  color: #abb2bf !important;
+}
+
+.copy-btn:active {
+  color: #abb2bf !important;
+}
+
+/* Primary CTA — white button, subtle hover dim */
+.cta-primary {
+  background: #fff;
+  color: #0a0a0a;
+  transition: opacity 0.15s ease;
+}
+
+.cta-primary:hover {
+  color: #0a0a0a;
+  opacity: 0.88;
+}
+
+.cta-primary:active {
+  color: #0a0a0a;
+  opacity: 0.76;
+}
+
 /* ------------------------------------------------------------------ */
-/* Responsive                                                         */
+/* Focus-visible — visible ring for keyboard users, hidden for mouse  */
+/* ------------------------------------------------------------------ */
+
+:focus-visible {
+  outline: 2px solid #555;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #555;
+  outline-offset: 2px;
+}
+
+/* Active-state feedback for touch (supplements hover which doesn't fire) */
+a:active {
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive — Mobile-first overrides                                */
 /* ------------------------------------------------------------------ */
 
 @media (max-width: 640px) {
-  .responsive-section {
+  /* Sections: tighter padding on mobile */
+  .reveal {
     padding: 3rem 1.25rem;
+  }
+
+  /* Typography: scale down headings */
+  h2 {
+    font-size: 1.4rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+  }
+
+  /* Tables: horizontal scroll with smaller text */
+  .config-table table {
+    font-size: 0.78rem;
+  }
+
+  .config-table th,
+  .config-table td {
+    padding: 0.4rem 0.5rem;
+  }
+
+  /* Code blocks: smaller text, tighter padding */
+  .code-highlight {
+    font-size: 0.75rem;
+  }
+
+  /* Footer: safe area padding for notched phones */
+  footer {
+    padding-bottom: max(2rem, env(safe-area-inset-bottom));
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
   }
 }

@@ -33,16 +33,10 @@ export function CodeBlock({ html, className }: { html: string; className?: strin
         type="button"
         onClick={handleCopy}
         aria-label={copied ? 'Copied' : 'Copy code'}
-        className="absolute top-2.5 right-2.5 p-1.5 rounded-md transition-all duration-150"
+        className="copy-btn absolute top-1.5 right-1.5 p-2.5 rounded-md transition-all duration-150"
         style={{
           color: copied ? '#98c379' : '#5c6370',
           background: copied ? 'rgba(152,195,121,0.1)' : 'transparent',
-        }}
-        onMouseEnter={(e) => {
-          if (!copied) e.currentTarget.style.color = '#abb2bf';
-        }}
-        onMouseLeave={(e) => {
-          if (!copied) e.currentTarget.style.color = '#5c6370';
         }}
       >
         {copied ? <Check size={16} /> : <Copy size={16} />}

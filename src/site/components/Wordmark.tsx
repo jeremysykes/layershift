@@ -16,8 +16,8 @@ export const Wordmark = forwardRef<HTMLDivElement>(function Wordmark(_, ref) {
       ref={ref}
       style={{
         position: 'fixed',
-        top: '1.5rem',
-        left: '1.5rem',
+        top: 'max(1rem, env(safe-area-inset-top, 0px))',
+        left: 'max(1rem, env(safe-area-inset-left, 0px))',
         zIndex: 3,
         fontSize: '1.1rem',
         fontWeight: 600,
