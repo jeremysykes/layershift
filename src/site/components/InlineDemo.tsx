@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LayershiftEffect } from './LayershiftEffect';
 import type { VideoEntry } from '../types';
 
@@ -10,8 +10,32 @@ interface InlineDemoProps {
 
 /**
  * Renders an inline demo of a Layershift effect with 16:9 aspect ratio.
+ * The WebGL renderer and video are only initialised once the container
+ * scrolls near the viewport (200 px ahead), avoiding unnecessary GPU
+ * and network cost for content the user hasn't reached yet.
  */
 export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '0px 0px 200px 0px' },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const attrs = useMemo(() => {
     if (!video) return demoAttrs;
     return {
@@ -23,8 +47,12 @@ export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
   }, [demoAttrs, video]);
 
   return (
-    <div className="w-full max-w-[640px] aspect-video mx-auto my-8 rounded-xl overflow-hidden" style={{ border: '1px solid #222' }}>
-      <LayershiftEffect tagName={tagName} attrs={attrs} />
+    <div
+      ref={containerRef}
+      className="w-full max-w-[640px] aspect-video mx-auto my-8 rounded-xl overflow-hidden"
+      style={{ border: '1px solid #222', background: '#000' }}
+    >
+      {visible && <LayershiftEffect tagName={tagName} attrs={attrs} />}
     </div>
   );
 }
