@@ -4,6 +4,7 @@ import { useHeroScroll } from '../hooks/useHeroScroll';
 import { useVideoAssignment } from '../hooks/useVideoAssignment';
 import { getEffectContent } from '../effect-content';
 import { LayershiftEffect } from './LayershiftEffect';
+import { EffectErrorBoundary } from './EffectErrorBoundary';
 import { Wordmark } from './Wordmark';
 import { ScrollHint } from './ScrollHint';
 
@@ -41,11 +42,15 @@ export function Hero() {
         className="fixed inset-0 z-0"
         style={{ willChange: 'opacity, transform' }}
       >
-        <LayershiftEffect
-          key={content.tagName}
-          tagName={content.tagName}
-          attrs={heroAttrs}
-        />
+        <EffectErrorBoundary
+          fallback={<div style={{ width: '100%', height: '100%', background: '#000' }} />}
+        >
+          <LayershiftEffect
+            key={content.tagName}
+            tagName={content.tagName}
+            attrs={heroAttrs}
+          />
+        </EffectErrorBoundary>
       </div>
       <ScrollHint ref={scrollHintRef} />
     </>
