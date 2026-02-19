@@ -73,3 +73,159 @@ export interface LayershiftEventMap {
   'layershift-parallax:frame': CustomEvent<LayershiftFrameDetail>;
   'layershift-parallax:error': CustomEvent<LayershiftErrorDetail>;
 }
+
+// ---------------------------------------------------------------------------
+// Portal Effect Types
+// ---------------------------------------------------------------------------
+
+/** Props for the <layershift-portal> Web Component. */
+export interface LayershiftPortalProps {
+  src: string;
+  depthSrc: string;
+  depthMeta: string;
+  logoSrc: string;
+  // Parallax
+  parallaxX?: number;
+  parallaxY?: number;
+  parallaxMax?: number;
+  overscan?: number;
+  /** POM ray-march step count for interior displacement. */
+  pomSteps?: number;
+  // Boundary effects
+  rimIntensity?: number;
+  rimColor?: string;
+  rimWidth?: number;
+  /** Refraction distortion strength. */
+  refractionStrength?: number;
+  /** Chromatic fringe strength. */
+  chromaticStrength?: number;
+  /** Volumetric occlusion intensity. */
+  occlusionIntensity?: number;
+  // Lens transform
+  /** Lens depth power (< 1 = wide-angle). */
+  depthPower?: number;
+  /** Depth range scale factor. */
+  depthScale?: number;
+  /** Depth bias (negative = near bias). */
+  depthBias?: number;
+  // Interior mood
+  /** Interior fog density. */
+  fogDensity?: number;
+  /** Interior fog color (hex string). */
+  fogColor?: string;
+  /** Color grading shift intensity. */
+  colorShift?: number;
+  /** Brightness bias adjustment. */
+  brightnessBias?: number;
+  // Depth-adaptive
+  /** Depth contrast remap low. */
+  contrastLow?: number;
+  /** Depth contrast remap high. */
+  contrastHigh?: number;
+  /** Vertical parallax reduction factor. */
+  verticalReduction?: number;
+  /** Depth-of-field start distance. */
+  dofStart?: number;
+  /** Depth-of-field blur strength. */
+  dofStrength?: number;
+  // Bevel / dimensional typography
+  /** Bevel shading intensity. */
+  bevelIntensity?: number;
+  /** Bevel effect width in distance field space. */
+  bevelWidth?: number;
+  /** Bevel darkening at edge. */
+  bevelDarkening?: number;
+  /** Bevel desaturation at edge. */
+  bevelDesaturation?: number;
+  /** Bevel light direction in degrees. */
+  bevelLightAngle?: number;
+  // Volumetric edge wall
+  /** Volumetric edge wall thickness. */
+  edgeThickness?: number;
+  /** Edge wall specular intensity. */
+  edgeSpecular?: number;
+  /** Edge wall base color (hex string). */
+  edgeColor?: string;
+  // Chamfer geometry
+  /** Chamfer width in normalized mesh coords (0 = no chamfer). */
+  chamferWidth?: number;
+  /** Chamfer angle in degrees (0 = face-forward, 90 = wall). */
+  chamferAngle?: number;
+  /** Chamfer base color (hex string). */
+  chamferColor?: string;
+  /** Chamfer ambient light level. */
+  chamferAmbient?: number;
+  /** Chamfer specular highlight intensity. */
+  chamferSpecular?: number;
+  /** Chamfer specular exponent (shininess). */
+  chamferShininess?: number;
+  // Edge occlusion (emissive interior)
+  /** Edge occlusion ramp width. */
+  edgeOcclusionWidth?: number;
+  /** Edge occlusion strength (0 = none, 1 = full). */
+  edgeOcclusionStrength?: number;
+  /** 3D light direction as "x,y,z" string. */
+  lightDirection?: string;
+  // Video
+  autoplay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  className?: string;
+  style?: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// Portal Custom Event Detail Types
+// ---------------------------------------------------------------------------
+
+/** Fired once after portal initialization completes successfully. */
+export interface LayershiftPortalReadyDetail {
+  videoWidth: number;
+  videoHeight: number;
+  duration: number;
+}
+
+/** Fired when portal video starts playing. */
+export interface LayershiftPortalPlayDetail {
+  currentTime: number;
+}
+
+/** Fired when portal video pauses. */
+export interface LayershiftPortalPauseDetail {
+  currentTime: number;
+}
+
+/** Fired when portal video loops back to start. */
+export interface LayershiftPortalLoopDetail {
+  loopCount: number;
+}
+
+/** Fired on each new portal video frame. */
+export interface LayershiftPortalFrameDetail {
+  currentTime: number;
+  frameNumber: number;
+}
+
+/** Fired on portal initialization errors. */
+export interface LayershiftPortalErrorDetail {
+  message: string;
+}
+
+/**
+ * Map of all custom events dispatched by `<layershift-portal>`.
+ *
+ * Usage with addEventListener:
+ * ```ts
+ * el.addEventListener('layershift-portal:ready', (e) => {
+ *   console.log(e.detail.videoWidth, e.detail.duration);
+ * });
+ * ```
+ */
+export interface LayershiftPortalEventMap {
+  'layershift-portal:ready': CustomEvent<LayershiftPortalReadyDetail>;
+  'layershift-portal:play': CustomEvent<LayershiftPortalPlayDetail>;
+  'layershift-portal:pause': CustomEvent<LayershiftPortalPauseDetail>;
+  'layershift-portal:loop': CustomEvent<LayershiftPortalLoopDetail>;
+  'layershift-portal:frame': CustomEvent<LayershiftPortalFrameDetail>;
+  'layershift-portal:error': CustomEvent<LayershiftPortalErrorDetail>;
+}

@@ -23,10 +23,16 @@ export interface VideoEntry {
   depthMeta: string;
 }
 
+/** Categorized video manifest: parallax videos for scene effects, textural for portal. */
+export interface VideoManifest {
+  parallax: VideoEntry[];
+  textural: VideoEntry[];
+}
+
 export interface SiteState {
   activeEffect: string;
   effects: EffectManifestEntry[];
-  videos: VideoEntry[];
+  videos: VideoManifest;
 }
 
 type Listener = (state: SiteState, prev: SiteState) => void;

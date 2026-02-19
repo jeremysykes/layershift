@@ -14,6 +14,7 @@ import {
   createStore,
   type EffectsManifest,
   type VideoEntry,
+  type VideoManifest,
   type Store,
 } from './store';
 import { getEffectContent, type EffectContent } from './effect-content';
@@ -41,12 +42,17 @@ async function loadEffectsManifest(): Promise<EffectsManifest> {
   }
 }
 
-async function loadVideoManifest(): Promise<VideoEntry[]> {
+async function loadVideoManifest(): Promise<VideoManifest> {
   try {
     const res = await fetch('/videos/manifest.json');
-    return await res.json();
+    const data = await res.json();
+    // Support both new categorized format and legacy flat array
+    if (Array.isArray(data)) {
+      return { parallax: data as VideoEntry[], textural: [] };
+    }
+    return data as VideoManifest;
   } catch {
-    return [];
+    return { parallax: [], textural: [] };
   }
 }
 
@@ -71,13 +77,26 @@ function applyVideo(el: HTMLElement, video: VideoEntry): void {
   el.setAttribute('depth-meta', video.depthMeta);
 }
 
-/** Assign shuffled videos to hero + inline demo elements. */
-function assignVideos(videos: VideoEntry[]): void {
-  if (!videos.length) return;
-  const shuffled = shuffle(videos);
+/** Selector matching any Layershift effect component (use with :is() when nesting). */
+const EFFECT_TAGS = ':is(layershift-parallax, layershift-portal)';
 
-  const heroEl = document.querySelector('#hero layershift-parallax');
-  const demoEl = document.querySelector('#effect-content .inline-demo layershift-parallax');
+/** Map effect IDs to the video category they should use. */
+const EFFECT_VIDEO_CATEGORY: Record<string, 'parallax' | 'textural'> = {
+  parallax: 'parallax',
+  portal: 'textural',
+  'tilt-shift': 'parallax',
+};
+
+/** Assign shuffled videos to hero + inline demo elements, using the right category for the active effect. */
+function assignVideos(videos: VideoManifest, activeEffect: string): void {
+  const category = EFFECT_VIDEO_CATEGORY[activeEffect] ?? 'parallax';
+  const pool = videos[category];
+  if (!pool.length) return;
+
+  const shuffled = shuffle(pool);
+
+  const heroEl = document.querySelector(`#hero ${EFFECT_TAGS}`);
+  const demoEl = document.querySelector(`#effect-content .inline-demo ${EFFECT_TAGS}`);
 
   if (heroEl) applyVideo(heroEl as HTMLElement, shuffled[0]);
   if (demoEl) applyVideo(demoEl as HTMLElement, shuffled[1 % shuffled.length]);
@@ -183,7 +202,8 @@ function updateHeroElement(content: EffectContent): void {
 /** Transition to a new effect with fade-out / swap / fade-in. */
 async function transitionToEffect(
   content: EffectContent,
-  videos: VideoEntry[],
+  videos: VideoManifest,
+  activeEffect: string,
   isInitial: boolean
 ): Promise<void> {
   const section = document.getElementById('effect-content');
@@ -195,7 +215,7 @@ async function transitionToEffect(
     // First render — no transition, just populate
     renderEffectContent(content);
     updateHeroElement(content);
-    assignVideos(videos);
+    assignVideos(videos, activeEffect);
     bindFrameworkTabs();
     return;
   }
@@ -207,7 +227,7 @@ async function transitionToEffect(
   // Swap content
   renderEffectContent(content);
   updateHeroElement(content);
-  assignVideos(videos);
+  assignVideos(videos, activeEffect);
   bindFrameworkTabs();
 
   // Fade in: briefly apply fade-in (starts invisible), then remove both classes
@@ -353,7 +373,7 @@ void (async () => {
   // Render initial effect content (no transition)
   const initialContent = getEffectContent(defaultId);
   if (initialContent) {
-    await transitionToEffect(initialContent, videos, true);
+    await transitionToEffect(initialContent, videos, defaultId, true);
   }
 
   // Subscribe to effect changes
@@ -367,7 +387,7 @@ void (async () => {
 
     const content = getEffectContent(state.activeEffect);
     if (content) {
-      await transitionToEffect(content, state.videos, false);
+      await transitionToEffect(content, state.videos, state.activeEffect, false);
     }
     isTransitioning = false;
   });
