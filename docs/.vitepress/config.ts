@@ -21,7 +21,7 @@ export default withMermaid(
       logo: '/favicon.svg',
 
       nav: [
-        { text: 'Home', link: 'https://layershift.io' },
+        { text: 'Home', link: '/' },
         { text: 'GitHub', link: 'https://github.com/jeremysykes/layershift' },
       ],
 
