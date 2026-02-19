@@ -60,7 +60,7 @@ export function InstallSection() {
   const codeRefs = useRef<Record<string, HTMLElement | null>>({});
 
   return (
-    <RevealSection>
+    <RevealSection id="install">
       <div className="max-w-[720px] mx-auto">
         <h2 className="text-primary text-[1.75rem] font-semibold mb-2">
           Get started

@@ -161,6 +161,23 @@ layershift-portal:not(:defined) {
   color: #abb2bf !important;
 }
 
+/* Primary CTA — white button, subtle hover dim */
+.cta-primary {
+  background: #fff;
+  color: #0a0a0a;
+  transition: opacity 0.15s ease;
+}
+
+.cta-primary:hover {
+  color: #0a0a0a;
+  opacity: 0.88;
+}
+
+.cta-primary:active {
+  color: #0a0a0a;
+  opacity: 0.76;
+}
+
 /* ------------------------------------------------------------------ */
 /* Focus-visible — visible ring for keyboard users, hidden for mouse  */
 /* ------------------------------------------------------------------ */
