@@ -72,62 +72,36 @@ export class LifecycleManager {
 
   // --- Public API (called from lifecycle callbacks) ---
 
-  /**
-   * Call from `connectedCallback`. Sets up Shadow DOM and attempts init
-   * if all required attributes are already present (e.g., after React
-   * Strict Mode remount where attributes persist on the DOM element).
-   */
   onConnected(): void {
     this.element.setupShadowDOM();
-    // Try init — if required attributes aren't set yet (first mount via
-    // React useEffect), tryInit() will exit early. If attributes DO
-    // exist (Strict Mode remount, or non-React inline usage), it will
-    // proceed immediately.
     void this.tryInit();
   }
 
-  /** Call from `disconnectedCallback`. Cancels in-flight init + disposes. */
   onDisconnected(): void {
     this.cancelInit();
     this.element.doDispose();
     this.initialized = false;
   }
 
-  /**
-   * Call from `attributeChangedCallback`. Handles the guard logic:
-   * - Skips non-reinit attributes
-   * - Skips same-value changes
-   * - Re-inits if already initialized
-   * - First-inits once all required attrs are present (deduped)
-   */
   onAttributeChanged(name: string, oldVal: string | null, newVal: string | null): void {
-    // Only react to reinit-triggering attributes
     if (!this.element.reinitAttributes.includes(name)) return;
-
-    // Skip no-op changes (e.g., React Strict Mode remount setting same values)
     if (oldVal === newVal) return;
 
     if (this.initialized) {
-      // Source changed on an active instance — tear down and re-init
       this.cancelInit();
       this.element.doDispose();
       this.initialized = false;
       this.element.setupShadowDOM();
       void this.tryInit();
     } else if (!this.initializing) {
-      // Not yet initialized and no init in flight — try if all attrs ready
       void this.tryInit();
     }
-    // If initializing is true, we let the current init finish.
-    // It will pick up the latest attribute values.
   }
 
-  /** Whether the element has completed initialization. */
   get isInitialized(): boolean {
     return this.initialized;
   }
 
-  /** Mark initialization as complete. Call at the end of doInit(). */
   markInitialized(): void {
     this.initialized = true;
     this.initializing = false;
@@ -135,26 +109,18 @@ export class LifecycleManager {
 
   // --- Internal ---
 
-  /**
-   * Attempt initialization if the element is connected and all required
-   * attributes are present. Uses an initializing guard to prevent
-   * concurrent init calls.
-   */
   private async tryInit(): Promise<void> {
     if (this.initializing) return;
 
     const el = this.element;
     if (!el.isConnected) return;
 
-    // Check all required reinit attributes are present
     for (const attr of el.reinitAttributes) {
       if (!el.getAttribute(attr)) return;
     }
 
-    // Cancel any previous in-flight init
     this.cancelInit();
 
-    // Create a per-invocation abort controller
     const abortController = new AbortController();
     this.abortController = abortController;
     this.initializing = true;
@@ -162,22 +128,15 @@ export class LifecycleManager {
     try {
       await el.doInit(abortController.signal);
 
-      // If signal was aborted during init, doInit should have returned
-      // early. But double-check to avoid marking as initialized.
       if (abortController.signal.aborted) {
         this.initializing = false;
         return;
       }
-
-      // doInit calls markInitialized() on success
-    } catch (err) {
-      // doInit is responsible for error handling/emission.
-      // Just clean up the initializing flag.
+    } catch {
       this.initializing = false;
     }
   }
 
-  /** Abort any in-flight init. */
   private cancelInit(): void {
     this.abortController?.abort();
     this.abortController = null;

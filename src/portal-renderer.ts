@@ -976,6 +976,7 @@ export class PortalRenderer {
   private jfaWidth = 0;
   private jfaHeight = 0;
   private distFieldDirty = true;
+  private hasColorBufferFloat = false;
 
   // Dimensions
   private depthWidth = 0;
@@ -1040,6 +1041,11 @@ export class PortalRenderer {
     if ('drawingBufferColorSpace' in gl) {
       (gl as unknown as Record<string, string>).drawingBufferColorSpace = 'srgb';
     }
+
+    // Enable float-renderable FBO attachments (required for RG16F JFA textures).
+    // Without this, JFA ping-pong FBOs are FRAMEBUFFER_INCOMPLETE and every
+    // gl.clear / gl.draw on them produces GL_INVALID_FRAMEBUFFER_OPERATION.
+    this.hasColorBufferFloat = !!gl.getExtension('EXT_color_buffer_float');
 
     // Transparent background — canvas composites over whatever is behind it
     gl.clearColor(0, 0, 0, 0);
@@ -1380,12 +1386,15 @@ export class PortalRenderer {
     this.maskTex = gl.createTexture()!;
     this.maskFbo = createFBO(this.maskTex, gl.R8, w, h);
 
-    // JFA ping-pong (RG16F at half-res — stores 2D seed coordinates)
+    // JFA ping-pong (RG16F at half-res — stores 2D seed coordinates).
+    // RG16F requires EXT_color_buffer_float to be color-renderable.
+    // Fall back to RGBA16F (also requires the ext) then RGBA8 if unavailable.
+    const jfaFormat = this.hasColorBufferFloat ? gl.RG16F : gl.RGBA8;
     this.jfaPingTex = gl.createTexture()!;
-    this.jfaPingFbo = createFBO(this.jfaPingTex, gl.RG16F, w, h);
+    this.jfaPingFbo = createFBO(this.jfaPingTex, jfaFormat, w, h);
 
     this.jfaPongTex = gl.createTexture()!;
-    this.jfaPongFbo = createFBO(this.jfaPongTex, gl.RG16F, w, h);
+    this.jfaPongFbo = createFBO(this.jfaPongTex, jfaFormat, w, h);
 
     // Final distance texture (R8 at half-res — sampled on unit 4)
     this.distTex = gl.createTexture()!;
@@ -1988,9 +1997,12 @@ export class PortalRenderer {
     });
     if (!gl) return;
     this.gl = gl;
+    this.hasColorBufferFloat = !!gl.getExtension('EXT_color_buffer_float');
     gl.clearColor(0, 0, 0, 0);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     this.initGPUResources();
+    // Rebuild FBOs and JFA resources (destroyed on context loss)
+    this.recalculateViewportLayout();
     if (this.playbackVideo) {
       this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
     }
