@@ -10,9 +10,57 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Preload manifests so they're cached before React requests them -->
+    <link rel="preload" href="/effects-manifest.json" as="fetch" crossorigin />
+    <link rel="preload" href="/videos/manifest.json" as="fetch" crossorigin />
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Early hero video preloading: fetch the manifest immediately, pick a random
+      hero video, and inject <link rel="preload"> for the video + depth assets.
+      This starts downloads before React hydrates. The selection is stored on
+      window.__LAYERSHIFT_HERO__ for React to consume, ensuring the preloaded
+      video is the one actually rendered.
+    -->
+    <script>
+    (function() {
+      Promise.all([
+        fetch('/effects-manifest.json').then(function(r) { return r.json(); }),
+        fetch('/videos/manifest.json').then(function(r) { return r.json(); })
+      ]).then(function(results) {
+        var em = results[0], vm = results[1];
+        var enabled = em.effects.filter(function(e) { return e.enabled; });
+        var defaultId = em.defaultEffect;
+        if (!enabled.some(function(e) { return e.id === defaultId; })) {
+          defaultId = enabled.length ? enabled[0].id : 'parallax';
+        }
+        var catMap = { parallax: 'parallax', portal: 'textural', 'tilt-shift': 'parallax' };
+        var pool = (vm[catMap[defaultId] || 'parallax']) || [];
+        if (!pool.length) return;
+
+        var hero = pool[Math.floor(Math.random() * pool.length)];
+        window.__LAYERSHIFT_HERO__ = hero;
+
+        // Inject preload hints for the hero video + depth assets
+        var head = document.head;
+        var link;
+
+        link = document.createElement('link');
+        link.rel = 'preload'; link.as = 'video'; link.type = 'video/mp4';
+        link.crossOrigin = 'anonymous';
+        link.href = hero.src; head.appendChild(link);
+
+        link = document.createElement('link');
+        link.rel = 'preload'; link.as = 'fetch'; link.crossOrigin = 'anonymous';
+        link.href = hero.depthSrc; head.appendChild(link);
+
+        link = document.createElement('link');
+        link.rel = 'preload'; link.as = 'fetch'; link.crossOrigin = 'anonymous';
+        link.href = hero.depthMeta; head.appendChild(link);
+      }).catch(function() { /* preloading is best-effort */ });
+    })();
+    </script>
     <script type="module" src="/src/site/main.tsx"></script>
   </body>
 </html>
