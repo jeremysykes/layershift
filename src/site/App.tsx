@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSiteStore } from './store';
 import { Hero } from './components/Hero';
+import { StickyNav } from './components/StickyNav';
 import { Content } from './components/Content';
 import type { EffectsManifest, VideoEntry, VideoManifest } from './types';
 
@@ -70,6 +71,7 @@ export function App() {
   return (
     <>
       <Hero />
+      <StickyNav />
       <Content />
     </>
   );
