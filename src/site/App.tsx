@@ -1,9 +1,6 @@
 import { useEffect } from 'react';
 import { useSiteStore } from './store';
-import { Hero } from './components/Hero';
-import { StickyNav } from './components/StickyNav';
-import { BackToTop } from './components/BackToTop';
-import { Content } from './components/Content';
+import { Hero, StickyNav, BackToTop, Content } from './components';
 import type { EffectsManifest, VideoEntry, VideoManifest } from './types';
 
 // ---------------------------------------------------------------------------

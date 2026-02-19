@@ -50,6 +50,19 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | `ui.ts` | Demo | Loading overlay UI |
 | `site/main.ts` | Demo | Landing page logic |
 
+### Site Components (`src/site/components/`)
+
+Organized using atomic design taxonomy. Each component has its own folder containing the component, Storybook story, test, and barrel export.
+
+| Level | Components |
+|-------|-----------|
+| Atoms (7) | Button, Skeleton, CodeBlock, ScrollHint, EffectDots, BackToTop, Wordmark |
+| Molecules (8) | Tabs, Table, ConfigTable, EventsTable, FrameworkTabs, EffectSelector, VideoSelector, HeroCta |
+| Organisms (12) | StickyNav, Footer, EffectDocs, EffectSection, InlineDemo, FullscreenOverlay, LayershiftEffect, EffectErrorBoundary, Hero, InstallSection, IntroSection, ComingSoonSection |
+| Templates (2) | Content, RevealSection |
+
+Each folder contains: `ComponentName.tsx`, `ComponentName.stories.tsx`, `ComponentName.test.tsx`, `index.ts`. Root barrel at `src/site/components/index.ts` re-exports all components. See [ADR-008](./adr/ADR-008-storybook-atomic-design-components.md) for the design rationale.
+
 ### Scripts (`scripts/`)
 
 | File | Purpose |
@@ -261,6 +274,8 @@ See [build system diagram](./diagrams/build-system.md) for the build flow diagra
 | `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle (Worker inlined) |
 | `npm run precompute` | depth-data.bin + depth-meta.json | Generate depth maps from video |
 | `npm run package` | `output/` | Bundle component + video + depth for deployment |
+| `npm run build:storybook` | `dist/storybook/` | Storybook static build |
+| `npm run storybook` | Dev server :6006 | Storybook dev server |
 | `npm run test` | — | Vitest unit tests |
 | `npm run test:e2e` | — | Playwright E2E tests |
 
@@ -308,6 +323,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-005](./adr/ADR-005-logo-depth-portal-effect.md) | Logo Depth Portal effect design decisions |
 | [ADR-006](./adr/ADR-006-portal-v4-emissive-chamfer-nesting.md) | Portal v4: emissive interior, geometric chamfer, nesting-based hole detection |
 | [ADR-007](./adr/ADR-007-vitepress-documentation-wiki.md) | VitePress documentation wiki integration |
+| [ADR-008](./adr/ADR-008-storybook-atomic-design-components.md) | Storybook integration with atomic design component structure |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |

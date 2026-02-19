@@ -1,0 +1,1 @@
+export { EffectDots } from './EffectDots';
