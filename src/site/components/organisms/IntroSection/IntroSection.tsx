@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import { RevealSection } from '../../templates/RevealSection';
 import { EffectSelector } from '../../molecules/EffectSelector';
-import { EffectDots } from '../../atoms/EffectDots';
 import { useSwipeEffectSwitcher } from '../../../hooks/useSwipeEffectSwitcher';
 
 export function IntroSection() {
@@ -20,7 +19,6 @@ export function IntroSection() {
           React, Vue, Svelte, Angular, WordPress&nbsp;&mdash; anywhere.
         </p>
         <EffectSelector />
-        <EffectDots />
       </div>
     </RevealSection>
   );
