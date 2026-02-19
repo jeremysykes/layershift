@@ -22,7 +22,6 @@ export default withMermaid(
 
       nav: [
         { text: 'Home', link: '/' },
-        { text: 'GitHub', link: 'https://github.com/jeremysykes/layershift' },
       ],
 
       sidebar: [
