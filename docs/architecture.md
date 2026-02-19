@@ -286,7 +286,12 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 
 | Document | Purpose |
 |----------|---------|
-| `CLAUDE.md` | Project rules, documentation-first workflow |
+| `CLAUDE.md` | Project rules, documentation-first workflow, AI control plane overview |
+| `AGENTS.md` | Orchestration pointer — references `.claude/governance/orchestration.md` |
+| `.claude/governance/orchestration.md` | Task routing, ownership boundaries, escalation rules, release pipeline |
+| `.claude/standards/invariants.md` | Project-wide inviolable constraints |
+| `.claude/agents/*.md` | Subagent definitions (7 roles with tool restrictions) |
+| `.claude/skills/*/SKILL.md` | Reusable procedural skills (`/publish-npm`, `/deploy-production`, `/run-tests`, `/create-adr`, `/audit-docs`) |
 | `docs/architecture.md` | This file — system architecture |
 | **Diagrams** | |
 | `docs/diagrams/system-architecture.md` | Library structure + module dependencies |

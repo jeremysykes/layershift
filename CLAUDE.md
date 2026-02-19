@@ -2,6 +2,20 @@
 
 Layershift is a video effects library. Each effect ships as a self-contained Web Component. Parallax (`<layershift-parallax>`) is the first effect; more effects will follow. Documentation and architecture must accommodate this multi-effect trajectory.
 
+## AI Control Plane
+
+The `.claude/` directory is the AI governance layer for this project:
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| **Agents** | `.claude/agents/*.md` | Subagent definitions — specialized roles with isolated context and tool restrictions |
+| **Skills** | `.claude/skills/*/SKILL.md` | Reusable procedures invocable as `/slash-commands` |
+| **Governance** | `.claude/governance/orchestration.md` | Task routing, ownership boundaries, escalation rules, release pipeline |
+| **Standards** | `.claude/standards/invariants.md` | Project-wide inviolable constraints |
+
+See `.claude/governance/orchestration.md` for role assignments, task routing, and escalation.
+See `.claude/standards/invariants.md` for constraints that all agents and skills must respect.
+
 ## Documentation-First Development
 
 All agents (human and AI) must consult and maintain project documentation at every step.
@@ -80,7 +94,9 @@ scripts/
 - `npm run test` — Unit tests (Vitest)
 - `npm run test:e2e` — E2E tests (Playwright)
 
-## Key Constraints (Parallax Effect)
+## Key Constraints
+
+> Full constraints are in `.claude/standards/invariants.md`. Summary below for quick reference.
 
 - **Zero per-frame overhead** from depth analysis. Analysis runs once at init.
 - **pomSteps is constant at 16.** Never derived or varied automatically.
