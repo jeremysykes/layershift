@@ -11,6 +11,7 @@ import {
   TableCell,
 } from '../../molecules/Table';
 import type { EffectContent } from '../../../types';
+import { DOCS_URL } from '../../../lib/nav';
 
 interface EffectDocsProps {
   content: EffectContent;
@@ -105,7 +106,7 @@ export function EffectDocs({ content }: EffectDocsProps) {
             </a>
             {content.docsLink && (
               <a
-                href={content.docsLink}
+                href={`${DOCS_URL}${content.docsLink}`}
                 className="hover:text-white transition-colors"
                 style={{ color: '#ccc' }}
               >

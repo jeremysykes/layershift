@@ -4,6 +4,8 @@ interface RevealSectionProps {
   children: ReactNode;
   className?: string;
   id?: string;
+  /** Vertical padding — defaults to `py-20`. Pass e.g. `py-10` to tighten. */
+  padding?: string;
 }
 
 /**
@@ -14,6 +16,7 @@ export function RevealSection({
   children,
   className = '',
   id,
+  padding = 'py-20',
 }: RevealSectionProps) {
   const ref = useRef<HTMLElement>(null);
 
@@ -40,7 +43,7 @@ export function RevealSection({
     <section
       ref={ref as React.RefObject<HTMLDivElement>}
       id={id}
-      className={`reveal py-20 px-6 ${className}`}
+      className={`reveal ${padding} px-6 ${className}`}
       style={{ background: '#0a0a0a' }}
     >
       {children}
