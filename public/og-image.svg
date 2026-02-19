@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0a0a0a"/>
+  <text x="100" y="260" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" font-size="72" fill="#ffffff">layershift</text>
+  <text x="100" y="350" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="400" font-size="32" fill="#888888">Embeddable video effects for any website.</text>
+  <text x="100" y="400" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="400" font-size="32" fill="#888888">One script tag. No framework dependencies.</text>
+  <rect x="100" y="460" width="120" height="4" rx="2" fill="#333333"/>
+  <text x="100" y="510" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="500" font-size="24" fill="#555555">layershift.io</text>
+</svg>
