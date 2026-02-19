@@ -62,16 +62,30 @@
   "homepage": "https://layershift.io",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@tailwindcss/vite": "^4.2.0",
     "@types/jsdom": "^27.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
     "@vitest/browser": "^4.0.18",
     "@xenova/transformers": "^2.17.2",
     "happy-dom": "^20.6.1",
     "jsdom": "^28.1.0",
     "playwright": "^1.58.2",
     "sharp": "^0.34.5",
+    "tailwindcss": "^4.2.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.574.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "zustand": "^5.0.11"
   }
 }

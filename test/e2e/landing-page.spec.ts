@@ -120,6 +120,9 @@ test.describe('Landing page', () => {
   });
 
   test('configuration and events tables are present', async ({ page }) => {
+    // Wait for React to render effect documentation (loads async manifests first)
+    await page.waitForSelector('.config-table', { timeout: 10_000 });
+
     const tables = page.locator('.config-table');
     const tableCount = await tables.count();
     expect(tableCount).toBeGreaterThanOrEqual(2); // attributes table + events table

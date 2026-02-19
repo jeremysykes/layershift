@@ -1,64 +1,46 @@
 /**
- * Lightweight pub/sub state store — zero dependencies.
+ * Site state store — Zustand.
  *
- * Modelled after Zustand's API surface (getState / setState / subscribe)
- * but implemented in ~40 LOC with no React or framework coupling.
+ * Manages the landing page state: active effect, loaded effects manifest,
+ * and video manifest. Components subscribe to slices via useSiteStore().
  */
 
-export interface EffectManifestEntry {
-  id: string;
-  label: string;
-  enabled: boolean;
-}
+import { create } from 'zustand';
+import type {
+  EffectManifestEntry,
+  EffectsManifest,
+  VideoEntry,
+  VideoManifest,
+} from './types';
 
-export interface EffectsManifest {
-  defaultEffect: string;
-  effects: EffectManifestEntry[];
-}
-
-export interface VideoEntry {
-  id: string;
-  src: string;
-  depthSrc: string;
-  depthMeta: string;
-}
-
-/** Categorized video manifest: parallax videos for scene effects, textural for portal. */
-export interface VideoManifest {
-  parallax: VideoEntry[];
-  textural: VideoEntry[];
-}
+// Re-export types for backwards compatibility
+export type { EffectManifestEntry, EffectsManifest, VideoEntry, VideoManifest };
 
 export interface SiteState {
   activeEffect: string;
   effects: EffectManifestEntry[];
   videos: VideoManifest;
+  isInitialized: boolean;
 }
 
-type Listener = (state: SiteState, prev: SiteState) => void;
-
-export interface Store {
-  getState: () => SiteState;
-  setState: (partial: Partial<SiteState>) => void;
-  subscribe: (listener: Listener) => () => void;
+interface SiteActions {
+  setActiveEffect: (id: string) => void;
+  initialize: (state: Pick<SiteState, 'activeEffect' | 'effects' | 'videos'>) => void;
 }
 
-export function createStore(initial: SiteState): Store {
-  let state = { ...initial };
-  const listeners = new Set<Listener>();
+export const useSiteStore = create<SiteState & SiteActions>((set) => ({
+  activeEffect: 'parallax',
+  effects: [],
+  videos: { parallax: [], textural: [] },
+  isInitialized: false,
 
-  return {
-    getState: () => state,
+  setActiveEffect: (id) => set({ activeEffect: id }),
 
-    setState(partial) {
-      const prev = state;
-      state = { ...state, ...partial };
-      listeners.forEach((fn) => fn(state, prev));
-    },
-
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-  };
-}
+  initialize: (state) =>
+    set({
+      activeEffect: state.activeEffect,
+      effects: state.effects,
+      videos: state.videos,
+      isInitialized: true,
+    }),
+}));
