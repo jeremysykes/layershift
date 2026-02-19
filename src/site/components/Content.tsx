@@ -12,7 +12,7 @@ export function Content() {
 
       <InstallSection />
 
-      <RevealSection>
+      <RevealSection id="effects">
         <EffectSection />
       </RevealSection>
 

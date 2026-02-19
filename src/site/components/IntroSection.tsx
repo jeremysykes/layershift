@@ -1,10 +1,16 @@
+import { useRef } from 'react';
 import { RevealSection } from './RevealSection';
 import { EffectSelector } from './EffectSelector';
+import { EffectDots } from './EffectDots';
+import { useSwipeEffectSwitcher } from '../hooks/useSwipeEffectSwitcher';
 
 export function IntroSection() {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  useSwipeEffectSwitcher(sectionRef);
+
   return (
     <RevealSection id="intro">
-      <div className="max-w-[720px] mx-auto">
+      <div ref={sectionRef} className="max-w-[720px] mx-auto">
         <h2 className="text-primary text-[1.75rem] font-semibold mb-4">
           Embeddable video effects
         </h2>
@@ -14,6 +20,7 @@ export function IntroSection() {
           React, Vue, Svelte, Angular, WordPress&nbsp;&mdash; anywhere.
         </p>
         <EffectSelector />
+        <EffectDots />
       </div>
     </RevealSection>
   );
