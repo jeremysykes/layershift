@@ -1,33 +1,14 @@
 /**
- * Effect content registry — HTML templates for each effect's documentation section.
+ * Effect content registry — structured data for each effect's documentation.
  *
  * Each effect registers its title, description, demo config, code examples,
- * configuration tables, events, and performance notes. The site renders
- * whichever effect is currently active from this registry.
+ * configuration tables, events, and performance notes. React components
+ * consume this data to render the documentation section.
  *
  * When adding a new effect, add a new entry to the `EFFECTS` map below.
  */
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface EffectContent {
-  /** Unique ID matching effects-manifest.json */
-  id: string;
-  /** Display title (e.g. "Depth Parallax") */
-  title: string;
-  /** Short description paragraph */
-  description: string;
-  /** Tag name for the Web Component (e.g. "layershift-parallax") */
-  tagName: string;
-  /** Attributes for the hero instance */
-  heroAttrs: Record<string, string>;
-  /** Attributes for the inline demo instance */
-  demoAttrs: Record<string, string>;
-  /** Full inner HTML for the documentation section (below demo) */
-  documentationHtml: string;
-}
+import type { EffectContent } from './types';
 
 // ---------------------------------------------------------------------------
 // Parallax effect content
@@ -43,64 +24,53 @@ const parallaxContent: EffectContent = {
     'parallax-x': '0.6',
     'parallax-y': '1.0',
     'parallax-max': '50',
-    'overscan': '0.08',
+    overscan: '0.08',
   },
   demoAttrs: {
     'parallax-x': '0.5',
     'parallax-y': '1.0',
     'parallax-max': '40',
   },
-  documentationHtml: `
-          <!-- Embed code -->
-          <p>One script tag. One element.</p>
-
-          <div class="code-block"><code><span class="comment">&lt;!-- Add the script --&gt;</span>
-<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+  embedIntro: 'One script tag. One element.',
+  embedCode: `<span class="comment">&lt;!-- Add the script --&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://cdn.layershift.io/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
 
 <span class="comment">&lt;!-- Use the element --&gt;</span>
 <span class="tag">&lt;layershift-parallax</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
   <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
   <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
-<span class="tag">&gt;&lt;/layershift-parallax&gt;</span></code></div>
+<span class="tag">&gt;&lt;/layershift-parallax&gt;</span>`,
 
-          <!-- Framework tabs -->
-          <div class="framework-tabs">
-            <div class="tab-bar">
-              <button class="tab-btn active" data-tab="html">HTML</button>
-              <button class="tab-btn" data-tab="react">React</button>
-              <button class="tab-btn" data-tab="vue">Vue</button>
-              <button class="tab-btn" data-tab="svelte">Svelte</button>
-              <button class="tab-btn" data-tab="angular">Angular</button>
-            </div>
-
-            <div class="tab-panel active" data-tab="html">
-              <div class="code-block"><code><span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+  frameworkExamples: [
+    {
+      framework: 'HTML',
+      code: `<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://cdn.layershift.io/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
 
 <span class="tag">&lt;layershift-parallax</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
   <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
   <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
-<span class="tag">&gt;&lt;/layershift-parallax&gt;</span></code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="react">
-              <div class="code-block"><code><span class="tag">import</span> { Layershift } <span class="tag">from</span> <span class="string">'layershift/react'</span>
+<span class="tag">&gt;&lt;/layershift-parallax&gt;</span>`,
+    },
+    {
+      framework: 'React',
+      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
 
 <span class="tag">export default function</span> Hero() {
   <span class="tag">return</span> (
-    <span class="tag">&lt;Layershift</span>
+    <span class="tag">&lt;layershift-parallax</span>
       <span class="attr">src</span>=<span class="string">"video.mp4"</span>
-      <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
-      <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
+      <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+      <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
     <span class="tag">/&gt;</span>
   )
-}</code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="vue">
-              <div class="code-block"><code><span class="tag">&lt;template&gt;</span>
-  <span class="tag">&lt;Layershift</span>
+}`,
+    },
+    {
+      framework: 'Vue',
+      code: `<span class="tag">&lt;template&gt;</span>
+  <span class="tag">&lt;layershift-parallax</span>
     <span class="attr">src</span>=<span class="string">"video.mp4"</span>
     <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
     <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
@@ -108,165 +78,63 @@ const parallaxContent: EffectContent = {
 <span class="tag">&lt;/template&gt;</span>
 
 <span class="tag">&lt;script setup&gt;</span>
-<span class="tag">import</span> Layershift <span class="tag">from</span> <span class="string">'layershift/vue'</span>
-<span class="tag">&lt;/script&gt;</span></code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="svelte">
-              <div class="code-block"><code><span class="tag">&lt;script&gt;</span>
-  <span class="tag">import</span> Layershift <span class="tag">from</span> <span class="string">'layershift/svelte'</span>
+<span class="tag">import</span> <span class="string">'layershift'</span>
+<span class="tag">&lt;/script&gt;</span>`,
+    },
+    {
+      framework: 'Svelte',
+      code: `<span class="tag">&lt;script&gt;</span>
+  <span class="tag">import</span> <span class="string">'layershift'</span>
 <span class="tag">&lt;/script&gt;</span>
 
-<span class="tag">&lt;Layershift</span>
+<span class="tag">&lt;layershift-parallax</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
-  <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
-  <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
-<span class="tag">/&gt;</span></code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="angular">
-              <div class="code-block"><code><span class="tag">import</span> { LayershiftComponent } <span class="tag">from</span> <span class="string">'layershift/angular'</span>
+  <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+  <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+<span class="tag">/&gt;</span>`,
+    },
+    {
+      framework: 'Angular',
+      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
+<span class="tag">import</span> { CUSTOM_ELEMENTS_SCHEMA } <span class="tag">from</span> <span class="string">'@angular/core'</span>
 
 @Component({
-  <span class="attr">imports</span>: [LayershiftComponent],
+  <span class="attr">schemas</span>: [CUSTOM_ELEMENTS_SCHEMA],
   <span class="attr">template</span>: <span class="string">\`
-    &lt;app-layershift-parallax
+    &lt;layershift-parallax
       src="video.mp4"
-      depthSrc="depth-data.bin"
-      depthMeta="depth-meta.json"
+      depth-src="depth-data.bin"
+      depth-meta="depth-meta.json"
     /&gt;
   \`</span>
 })
-<span class="tag">export class</span> HeroComponent {}</code></div>
-            </div>
-          </div>
+<span class="tag">export class</span> HeroComponent {}`,
+    },
+  ],
 
-          <!-- Configuration table -->
-          <h3 style="color: #fff; margin-bottom: 0.75rem; font-size: 1.1rem;">Configuration</h3>
+  configAttributes: [
+    { attribute: 'src', type: 'string', default: '\u2014', description: 'Video file URL (required)' },
+    { attribute: 'depth-src', type: 'string', default: '\u2014', description: 'Precomputed depth binary URL (required)' },
+    { attribute: 'depth-meta', type: 'string', default: '\u2014', description: 'Depth metadata JSON URL (required)' },
+    { attribute: 'parallax-x', type: 'number', default: '0.4', description: 'Horizontal parallax intensity' },
+    { attribute: 'parallax-y', type: 'number', default: '1.0', description: 'Vertical parallax intensity' },
+    { attribute: 'parallax-max', type: 'number', default: '30', description: 'Max pixel offset for nearest layer' },
+    { attribute: 'overscan', type: 'number', default: '0.05', description: 'Extra padding to prevent edge reveal' },
+    { attribute: 'autoplay', type: 'boolean', default: 'true', description: 'Auto-play on element mount' },
+    { attribute: 'loop', type: 'boolean', default: 'true', description: 'Loop video playback' },
+    { attribute: 'muted', type: 'boolean', default: 'true', description: 'Muted playback (required for autoplay)' },
+  ],
 
-          <table class="config-table">
-            <thead>
-              <tr>
-                <th>Attribute</th>
-                <th>Type</th>
-                <th>Default</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Video file URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>depth-src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Precomputed depth binary URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>depth-meta</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Depth metadata JSON URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>parallax-x</code></td>
-                <td>number</td>
-                <td>0.4</td>
-                <td>Horizontal parallax intensity</td>
-              </tr>
-              <tr>
-                <td><code>parallax-y</code></td>
-                <td>number</td>
-                <td>1.0</td>
-                <td>Vertical parallax intensity</td>
-              </tr>
-              <tr>
-                <td><code>parallax-max</code></td>
-                <td>number</td>
-                <td>30</td>
-                <td>Max pixel offset for nearest layer</td>
-              </tr>
-              <tr>
-                <td><code>overscan</code></td>
-                <td>number</td>
-                <td>0.05</td>
-                <td>Extra padding to prevent edge reveal</td>
-              </tr>
-              <tr>
-                <td><code>autoplay</code></td>
-                <td>boolean</td>
-                <td>true</td>
-                <td>Auto-play on element mount</td>
-              </tr>
-              <tr>
-                <td><code>loop</code></td>
-                <td>boolean</td>
-                <td>true</td>
-                <td>Loop video playback</td>
-              </tr>
-              <tr>
-                <td><code>muted</code></td>
-                <td>boolean</td>
-                <td>true</td>
-                <td>Muted playback (required for autoplay)</td>
-              </tr>
-            </tbody>
-          </table>
+  events: [
+    { event: 'layershift-parallax:ready', detail: 'videoWidth, videoHeight, duration', when: 'Initialization complete' },
+    { event: 'layershift-parallax:play', detail: 'currentTime', when: 'Video starts playing' },
+    { event: 'layershift-parallax:pause', detail: 'currentTime', when: 'Video pauses' },
+    { event: 'layershift-parallax:loop', detail: 'loopCount', when: 'Video loops back to start' },
+    { event: 'layershift-parallax:frame', detail: 'currentTime, frameNumber', when: 'New video frame presented' },
+    { event: 'layershift-parallax:error', detail: 'message', when: 'Initialization error' },
+  ],
 
-          <!-- Events -->
-          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Events</h3>
-          <p>
-            Listen for lifecycle and frame-level events. All events bubble through the DOM,
-            including Shadow DOM boundaries.
-          </p>
-
-          <table class="config-table">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Detail</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>layershift-parallax:ready</code></td>
-                <td>videoWidth, videoHeight, duration</td>
-                <td>Initialization complete</td>
-              </tr>
-              <tr>
-                <td><code>layershift-parallax:play</code></td>
-                <td>currentTime</td>
-                <td>Video starts playing</td>
-              </tr>
-              <tr>
-                <td><code>layershift-parallax:pause</code></td>
-                <td>currentTime</td>
-                <td>Video pauses</td>
-              </tr>
-              <tr>
-                <td><code>layershift-parallax:loop</code></td>
-                <td>loopCount</td>
-                <td>Video loops back to start</td>
-              </tr>
-              <tr>
-                <td><code>layershift-parallax:frame</code></td>
-                <td>currentTime, frameNumber</td>
-                <td>New video frame presented</td>
-              </tr>
-              <tr>
-                <td><code>layershift-parallax:error</code></td>
-                <td>message</td>
-                <td>Initialization error</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="code-block"><code><span class="tag">const</span> el = document.querySelector(<span class="string">'layershift-parallax'</span>);
+  eventListenerExample: `<span class="tag">const</span> el = document.querySelector(<span class="string">'layershift-parallax'</span>);
 
 el.addEventListener(<span class="string">'layershift-parallax:ready'</span>, (e) =&gt; {
   console.log(<span class="string">\`Video: \${e.detail.videoWidth}x\${e.detail.videoHeight}\`</span>);
@@ -275,151 +143,23 @@ el.addEventListener(<span class="string">'layershift-parallax:ready'</span>, (e)
 el.addEventListener(<span class="string">'layershift-parallax:frame'</span>, (e) =&gt; {
   <span class="comment">// Sync external UI to exact video frames</span>
   updateTimeline(e.detail.currentTime);
-});</code></div>
+});`,
 
-          <!-- Performance -->
-          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Performance</h3>
-          <p>
-            Each instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden &lt;video&gt; element,
-            and 2 GPU textures. The bilateral filter runs entirely off the main thread.
-          </p>
+  performanceNotes:
+    'Each instance creates 1 WebGL renderer, 1 Web Worker, 1 hidden <video> element, and 2 GPU textures. The bilateral filter runs entirely off the main thread.',
+  performanceTable: [
+    { instances: '1\u20133', suitability: 'Smooth on all modern devices including mobile' },
+    { instances: '4\u20136', suitability: 'Great on desktop; mobile may hit browser video decoder limits' },
+    { instances: '8\u201312', suitability: 'Desktop only; consider pausing off-screen instances' },
+  ],
 
-          <table class="config-table">
-            <thead>
-              <tr>
-                <th>Instances</th>
-                <th>Suitability</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>1&ndash;3</strong></td>
-                <td>Smooth on all modern devices including mobile</td>
-              </tr>
-              <tr>
-                <td><strong>4&ndash;6</strong></td>
-                <td>Great on desktop; mobile may hit browser video decoder limits</td>
-              </tr>
-              <tr>
-                <td><strong>8&ndash;12</strong></td>
-                <td>Desktop only; consider pausing off-screen instances</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <p>
-            The bottleneck is concurrent video decoders, not GPU or Workers. For scroll-based
-            galleries, pause or unmount off-screen instances to stay within browser limits.
-          </p>
-
-          <!-- Prepare your video -->
-          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Prepare your video</h3>
-          <p>
-            Videos need precomputed depth data. Run the CLI tool on your video
-            once &mdash; it produces the depth binary and metadata files. Then embed.
-          </p>
-          <div class="code-block"><code><span class="comment"># Install</span>
+  prepareVideoIntro:
+    'Videos need precomputed depth data. Run the CLI tool on your video once \u2014 it produces the depth binary and metadata files. Then embed.',
+  prepareVideoCode: `<span class="comment"># Install</span>
 npm install layershift
 
 <span class="comment"># Generate depth data</span>
-npm run precompute -- your-video.mp4</code></div>
-          <p>
-            <a href="https://github.com/jeremysykes/layershift" target="_blank" rel="noopener">
-              View on GitHub &rarr;
-            </a>
-          </p>`,
-};
-
-// ---------------------------------------------------------------------------
-// Tilt Shift effect content (DUMMY — for testing multi-effect selector)
-// ---------------------------------------------------------------------------
-
-const tiltShiftContent: EffectContent = {
-  id: 'tilt-shift',
-  title: 'Tilt Shift',
-  description:
-    'Applies a dynamic tilt-shift blur to video, creating a miniature-model look. The focal plane follows depth data so sharp and blurred regions feel natural, not just banded.',
-  tagName: 'layershift-parallax', // reuses parallax component for testing
-  heroAttrs: {
-    'parallax-x': '0.3',
-    'parallax-y': '0.5',
-    'parallax-max': '25',
-    'overscan': '0.04',
-  },
-  demoAttrs: {
-    'parallax-x': '0.3',
-    'parallax-y': '0.5',
-    'parallax-max': '25',
-  },
-  documentationHtml: `
-          <p>One script tag. One element.</p>
-
-          <div class="code-block"><code><span class="comment">&lt;!-- Add the script --&gt;</span>
-<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
-
-<span class="comment">&lt;!-- Use the element --&gt;</span>
-<span class="tag">&lt;layershift-tiltshift</span>
-  <span class="attr">src</span>=<span class="string">"video.mp4"</span>
-  <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
-  <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
-<span class="tag">&gt;&lt;/layershift-tiltshift&gt;</span></code></div>
-
-          <!-- Configuration table -->
-          <h3 style="color: #fff; margin-bottom: 0.75rem; font-size: 1.1rem;">Configuration</h3>
-
-          <table class="config-table">
-            <thead>
-              <tr>
-                <th>Attribute</th>
-                <th>Type</th>
-                <th>Default</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Video file URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>depth-src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Precomputed depth binary URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>depth-meta</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Depth metadata JSON URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>blur-radius</code></td>
-                <td>number</td>
-                <td>12</td>
-                <td>Maximum blur radius in pixels</td>
-              </tr>
-              <tr>
-                <td><code>focal-depth</code></td>
-                <td>number</td>
-                <td>0.5</td>
-                <td>Depth value (0&ndash;1) that stays in focus</td>
-              </tr>
-              <tr>
-                <td><code>focal-range</code></td>
-                <td>number</td>
-                <td>0.2</td>
-                <td>Range around focal depth that remains sharp</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <p style="color: #666; font-style: italic;">
-            This is a placeholder effect for testing the multi-effect selector.
-            The actual tilt-shift implementation is coming soon.
-          </p>`,
+npm run precompute -- your-video.mp4`,
 };
 
 // ---------------------------------------------------------------------------
@@ -430,45 +170,38 @@ const portalContent: EffectContent = {
   id: 'portal',
   title: 'Logo Depth Portal',
   description:
-    'Turn your brand logo into a living window. Video plays inside the cutout of any SVG shape — but unlike a flat CSS mask, the depth-aware parallax makes objects inside shift as you move, creating real perceived depth. A rim-light glow on the inner edges completes the effect.',
+    'Turn your brand logo into a living window. Video plays inside the cutout of any SVG shape \u2014 but unlike a flat CSS mask, the depth-aware parallax makes objects inside shift as you move, creating real perceived depth. A rim-light glow on the inner edges completes the effect.',
   tagName: 'layershift-portal',
   heroAttrs: {
     'parallax-x': '0.5',
     'parallax-y': '1.0',
     'parallax-max': '50',
-    'overscan': '0.08',
+    overscan: '0.08',
     'pom-steps': '16',
     'logo-src': '/logos/layershift-logo.svg',
-    // Boundary: structural seam, not a glow
     'rim-intensity': '0.7',
     'rim-color': '#ffffff',
     'rim-width': '0.03',
     'refraction-strength': '0.02',
     'chromatic-strength': '0.01',
     'occlusion-intensity': '0.5',
-    // Lens: wide-angle, exaggerated foreground
     'depth-power': '0.6',
     'depth-scale': '1.3',
     'depth-bias': '-0.05',
-    // Interior mood: cool, deep, slightly foggy
     'fog-density': '0.2',
     'fog-color': '#0a0a1a',
     'color-shift': '0.8',
     'brightness-bias': '0.05',
-    // DOF: strong blur on far objects
     'dof-start': '0.4',
     'dof-strength': '0.6',
-    // Bevel: dimensional typography
     'bevel-intensity': '0.5',
     'bevel-width': '0.04',
     'bevel-darkening': '0.2',
     'bevel-desaturation': '0.12',
     'bevel-light-angle': '135',
-    // Volumetric edge wall
     'edge-thickness': '0.01',
     'edge-specular': '0.35',
     'edge-color': '#a0a0a0',
-    // Chamfer geometry
     'chamfer-width': '0.025',
     'chamfer-color': '#262630',
     'chamfer-ambient': '0.12',
@@ -494,12 +227,10 @@ const portalContent: EffectContent = {
     'chamfer-width': '0.02',
     'chamfer-color': '#262630',
   },
-  documentationHtml: `
-          <!-- Embed code -->
-          <p>One script tag. One element. Provide your SVG logo. The component handles everything &mdash; video playback, depth loading, GPU rendering, and input tracking. It works like a native HTML element: drop it in and it runs.</p>
-
-          <div class="code-block"><code><span class="comment">&lt;!-- Add the script --&gt;</span>
-<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+  embedIntro:
+    'One script tag. One element. Provide your SVG logo. The component handles everything \u2014 video playback, depth loading, GPU rendering, and input tracking. It works like a native HTML element: drop it in and it runs.',
+  embedCode: `<span class="comment">&lt;!-- Add the script --&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://cdn.layershift.io/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
 
 <span class="comment">&lt;!-- Use the element --&gt;</span>
 <span class="tag">&lt;layershift-portal</span>
@@ -507,20 +238,12 @@ const portalContent: EffectContent = {
   <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
   <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
   <span class="attr">logo-src</span>=<span class="string">"logo.svg"</span>
-<span class="tag">&gt;&lt;/layershift-portal&gt;</span></code></div>
+<span class="tag">&gt;&lt;/layershift-portal&gt;</span>`,
 
-          <!-- Framework tabs -->
-          <div class="framework-tabs">
-            <div class="tab-bar">
-              <button class="tab-btn active" data-tab="html">HTML</button>
-              <button class="tab-btn" data-tab="react">React</button>
-              <button class="tab-btn" data-tab="vue">Vue</button>
-              <button class="tab-btn" data-tab="svelte">Svelte</button>
-              <button class="tab-btn" data-tab="angular">Angular</button>
-            </div>
-
-            <div class="tab-panel active" data-tab="html">
-              <div class="code-block"><code><span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://yourdomain.com/components/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+  frameworkExamples: [
+    {
+      framework: 'HTML',
+      code: `<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://cdn.layershift.io/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
 
 <span class="tag">&lt;layershift-portal</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
@@ -528,27 +251,27 @@ const portalContent: EffectContent = {
   <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
   <span class="attr">logo-src</span>=<span class="string">"logo.svg"</span>
   <span class="attr">rim-intensity</span>=<span class="string">"0.5"</span>
-<span class="tag">&gt;&lt;/layershift-portal&gt;</span></code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="react">
-              <div class="code-block"><code><span class="tag">import</span> { LayershiftPortal } <span class="tag">from</span> <span class="string">'layershift/react'</span>
+<span class="tag">&gt;&lt;/layershift-portal&gt;</span>`,
+    },
+    {
+      framework: 'React',
+      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
 
 <span class="tag">export default function</span> Hero() {
   <span class="tag">return</span> (
-    <span class="tag">&lt;LayershiftPortal</span>
+    <span class="tag">&lt;layershift-portal</span>
       <span class="attr">src</span>=<span class="string">"video.mp4"</span>
-      <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
-      <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
-      <span class="attr">logoSrc</span>=<span class="string">"logo.svg"</span>
+      <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+      <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+      <span class="attr">logo-src</span>=<span class="string">"logo.svg"</span>
     <span class="tag">/&gt;</span>
   )
-}</code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="vue">
-              <div class="code-block"><code><span class="tag">&lt;template&gt;</span>
-  <span class="tag">&lt;LayershiftPortal</span>
+}`,
+    },
+    {
+      framework: 'Vue',
+      code: `<span class="tag">&lt;template&gt;</span>
+  <span class="tag">&lt;layershift-portal</span>
     <span class="attr">src</span>=<span class="string">"video.mp4"</span>
     <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
     <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
@@ -557,214 +280,123 @@ const portalContent: EffectContent = {
 <span class="tag">&lt;/template&gt;</span>
 
 <span class="tag">&lt;script setup&gt;</span>
-<span class="tag">import</span> LayershiftPortal <span class="tag">from</span> <span class="string">'layershift/vue'</span>
-<span class="tag">&lt;/script&gt;</span></code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="svelte">
-              <div class="code-block"><code><span class="tag">&lt;script&gt;</span>
-  <span class="tag">import</span> LayershiftPortal <span class="tag">from</span> <span class="string">'layershift/svelte'</span>
+<span class="tag">import</span> <span class="string">'layershift'</span>
+<span class="tag">&lt;/script&gt;</span>`,
+    },
+    {
+      framework: 'Svelte',
+      code: `<span class="tag">&lt;script&gt;</span>
+  <span class="tag">import</span> <span class="string">'layershift'</span>
 <span class="tag">&lt;/script&gt;</span>
 
-<span class="tag">&lt;LayershiftPortal</span>
+<span class="tag">&lt;layershift-portal</span>
   <span class="attr">src</span>=<span class="string">"video.mp4"</span>
-  <span class="attr">depthSrc</span>=<span class="string">"depth-data.bin"</span>
-  <span class="attr">depthMeta</span>=<span class="string">"depth-meta.json"</span>
-  <span class="attr">logoSrc</span>=<span class="string">"logo.svg"</span>
-<span class="tag">/&gt;</span></code></div>
-            </div>
-
-            <div class="tab-panel" data-tab="angular">
-              <div class="code-block"><code><span class="tag">import</span> { LayershiftPortalComponent } <span class="tag">from</span> <span class="string">'layershift/angular'</span>
+  <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+  <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+  <span class="attr">logo-src</span>=<span class="string">"logo.svg"</span>
+<span class="tag">/&gt;</span>`,
+    },
+    {
+      framework: 'Angular',
+      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
+<span class="tag">import</span> { CUSTOM_ELEMENTS_SCHEMA } <span class="tag">from</span> <span class="string">'@angular/core'</span>
 
 @Component({
-  <span class="attr">imports</span>: [LayershiftPortalComponent],
+  <span class="attr">schemas</span>: [CUSTOM_ELEMENTS_SCHEMA],
   <span class="attr">template</span>: <span class="string">\`
-    &lt;app-layershift-portal
+    &lt;layershift-portal
       src="video.mp4"
-      depthSrc="depth-data.bin"
-      depthMeta="depth-meta.json"
-      logoSrc="logo.svg"
+      depth-src="depth-data.bin"
+      depth-meta="depth-meta.json"
+      logo-src="logo.svg"
     /&gt;
   \`</span>
 })
-<span class="tag">export class</span> HeroComponent {}</code></div>
-            </div>
-          </div>
+<span class="tag">export class</span> HeroComponent {}`,
+    },
+  ],
 
-          <!-- Configuration table -->
-          <h3 style="color: #fff; margin-bottom: 0.75rem; font-size: 1.1rem;">Configuration</h3>
+  configAttributes: [
+    { attribute: 'src', type: 'string', default: '\u2014', description: 'Video file URL (required)' },
+    { attribute: 'depth-src', type: 'string', default: '\u2014', description: 'Precomputed depth binary URL (required)' },
+    { attribute: 'depth-meta', type: 'string', default: '\u2014', description: 'Depth metadata JSON URL (required)' },
+    { attribute: 'logo-src', type: 'string', default: '\u2014', description: 'SVG logo/shape file URL (required)' },
+    { attribute: 'parallax-x', type: 'number', default: '0.4', description: 'Horizontal parallax intensity' },
+    { attribute: 'parallax-y', type: 'number', default: '0.8', description: 'Vertical parallax intensity' },
+    { attribute: 'parallax-max', type: 'number', default: '30', description: 'Max pixel offset for nearest layer' },
+    { attribute: 'overscan', type: 'number', default: '0.06', description: 'Extra padding to prevent edge reveal' },
+    { attribute: 'rim-intensity', type: 'number', default: '0.4', description: 'Rim light glow intensity (0 = off, 1 = max)' },
+    { attribute: 'rim-color', type: 'string', default: '#ffffff', description: 'Rim light color (hex)' },
+    { attribute: 'rim-width', type: 'number', default: '0.015', description: 'Rim light width (fraction of viewport)' },
+    { attribute: 'autoplay', type: 'boolean', default: 'true', description: 'Auto-play on element mount' },
+    { attribute: 'loop', type: 'boolean', default: 'true', description: 'Loop video playback' },
+    { attribute: 'muted', type: 'boolean', default: 'true', description: 'Muted playback (required for autoplay)' },
+  ],
 
-          <table class="config-table">
-            <thead>
-              <tr>
-                <th>Attribute</th>
-                <th>Type</th>
-                <th>Default</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Video file URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>depth-src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Precomputed depth binary URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>depth-meta</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>Depth metadata JSON URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>logo-src</code></td>
-                <td>string</td>
-                <td>&mdash;</td>
-                <td>SVG logo/shape file URL (required)</td>
-              </tr>
-              <tr>
-                <td><code>parallax-x</code></td>
-                <td>number</td>
-                <td>0.4</td>
-                <td>Horizontal parallax intensity</td>
-              </tr>
-              <tr>
-                <td><code>parallax-y</code></td>
-                <td>number</td>
-                <td>0.8</td>
-                <td>Vertical parallax intensity</td>
-              </tr>
-              <tr>
-                <td><code>parallax-max</code></td>
-                <td>number</td>
-                <td>30</td>
-                <td>Max pixel offset for nearest layer</td>
-              </tr>
-              <tr>
-                <td><code>overscan</code></td>
-                <td>number</td>
-                <td>0.06</td>
-                <td>Extra padding to prevent edge reveal</td>
-              </tr>
-              <tr>
-                <td><code>rim-intensity</code></td>
-                <td>number</td>
-                <td>0.4</td>
-                <td>Rim light glow intensity (0 = off, 1 = max)</td>
-              </tr>
-              <tr>
-                <td><code>rim-color</code></td>
-                <td>string</td>
-                <td>#ffffff</td>
-                <td>Rim light color (hex)</td>
-              </tr>
-              <tr>
-                <td><code>rim-width</code></td>
-                <td>number</td>
-                <td>0.015</td>
-                <td>Rim light width (fraction of viewport)</td>
-              </tr>
-              <tr>
-                <td><code>autoplay</code></td>
-                <td>boolean</td>
-                <td>true</td>
-                <td>Auto-play on element mount</td>
-              </tr>
-              <tr>
-                <td><code>loop</code></td>
-                <td>boolean</td>
-                <td>true</td>
-                <td>Loop video playback</td>
-              </tr>
-              <tr>
-                <td><code>muted</code></td>
-                <td>boolean</td>
-                <td>true</td>
-                <td>Muted playback (required for autoplay)</td>
-              </tr>
-            </tbody>
-          </table>
+  events: [
+    { event: 'layershift-portal:ready', detail: 'videoWidth, videoHeight, duration', when: 'Initialization complete' },
+    { event: 'layershift-portal:play', detail: 'currentTime', when: 'Video starts playing' },
+    { event: 'layershift-portal:pause', detail: 'currentTime', when: 'Video pauses' },
+    { event: 'layershift-portal:loop', detail: 'loopCount', when: 'Video loops back to start' },
+    { event: 'layershift-portal:frame', detail: 'currentTime, frameNumber', when: 'New video frame presented' },
+    { event: 'layershift-portal:error', detail: 'message', when: 'Initialization error' },
+  ],
 
-          <!-- Events -->
-          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Events</h3>
-          <p>
-            Listen for lifecycle and frame-level events. All events bubble through the DOM,
-            including Shadow DOM boundaries.
-          </p>
+  performanceNotes:
+    'Each instance creates 1 WebGL renderer (9 shader programs), 1 Web Worker, 1 hidden <video> element, and 2 GPU textures. The stencil pass adds minimal overhead (<0.5ms per frame).',
 
-          <table class="config-table">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Detail</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>layershift-portal:ready</code></td>
-                <td>videoWidth, videoHeight, duration</td>
-                <td>Initialization complete</td>
-              </tr>
-              <tr>
-                <td><code>layershift-portal:play</code></td>
-                <td>currentTime</td>
-                <td>Video starts playing</td>
-              </tr>
-              <tr>
-                <td><code>layershift-portal:pause</code></td>
-                <td>currentTime</td>
-                <td>Video pauses</td>
-              </tr>
-              <tr>
-                <td><code>layershift-portal:loop</code></td>
-                <td>loopCount</td>
-                <td>Video loops back to start</td>
-              </tr>
-              <tr>
-                <td><code>layershift-portal:frame</code></td>
-                <td>currentTime, frameNumber</td>
-                <td>New video frame presented</td>
-              </tr>
-              <tr>
-                <td><code>layershift-portal:error</code></td>
-                <td>message</td>
-                <td>Initialization error</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <!-- Performance -->
-          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Performance</h3>
-          <p>
-            Each instance creates 1 WebGL renderer (3 shader programs), 1 Web Worker,
-            1 hidden &lt;video&gt; element, and 2 GPU textures. The stencil pass adds
-            minimal overhead (&lt;0.5ms per frame).
-          </p>
-
-          <!-- Prepare your video -->
-          <h3 style="color: #fff; margin: 2rem 0 0.75rem; font-size: 1.1rem;">Prepare your video</h3>
-          <p>
-            Same depth preprocessing as the parallax effect. Run the CLI tool once
-            on your video to generate the depth files.
-          </p>
-          <div class="code-block"><code><span class="comment"># Install</span>
+  prepareVideoIntro:
+    'Same depth preprocessing as the parallax effect. Run the CLI tool once on your video to generate the depth files.',
+  prepareVideoCode: `<span class="comment"># Install</span>
 npm install layershift
 
 <span class="comment"># Generate depth data</span>
-npm run precompute -- your-video.mp4</code></div>
-          <p>
-            <a href="https://github.com/jeremysykes/layershift" target="_blank" rel="noopener">
-              View on GitHub &rarr;
-            </a>
-          </p>`,
+npm run precompute -- your-video.mp4`,
+};
+
+// ---------------------------------------------------------------------------
+// Tilt Shift effect content (DUMMY — for testing multi-effect selector)
+// ---------------------------------------------------------------------------
+
+const tiltShiftContent: EffectContent = {
+  id: 'tilt-shift',
+  title: 'Tilt Shift',
+  description:
+    'Applies a dynamic tilt-shift blur to video, creating a miniature-model look. The focal plane follows depth data so sharp and blurred regions feel natural, not just banded.',
+  tagName: 'layershift-parallax', // reuses parallax component for testing
+  heroAttrs: {
+    'parallax-x': '0.3',
+    'parallax-y': '0.5',
+    'parallax-max': '25',
+    overscan: '0.04',
+  },
+  demoAttrs: {
+    'parallax-x': '0.3',
+    'parallax-y': '0.5',
+    'parallax-max': '25',
+  },
+  embedIntro: 'One script tag. One element.',
+  embedCode: `<span class="comment">&lt;!-- Add the script --&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://cdn.layershift.io/layershift.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+
+<span class="comment">&lt;!-- Use the element --&gt;</span>
+<span class="tag">&lt;layershift-tiltshift</span>
+  <span class="attr">src</span>=<span class="string">"video.mp4"</span>
+  <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
+  <span class="attr">depth-meta</span>=<span class="string">"depth-meta.json"</span>
+<span class="tag">&gt;&lt;/layershift-tiltshift&gt;</span>`,
+  frameworkExamples: [],
+  configAttributes: [
+    { attribute: 'src', type: 'string', default: '\u2014', description: 'Video file URL (required)' },
+    { attribute: 'depth-src', type: 'string', default: '\u2014', description: 'Precomputed depth binary URL (required)' },
+    { attribute: 'depth-meta', type: 'string', default: '\u2014', description: 'Depth metadata JSON URL (required)' },
+    { attribute: 'blur-radius', type: 'number', default: '12', description: 'Maximum blur radius in pixels' },
+    { attribute: 'focal-depth', type: 'number', default: '0.5', description: 'Depth value (0\u20131) that stays in focus' },
+    { attribute: 'focal-range', type: 'number', default: '0.2', description: 'Range around focal depth that remains sharp' },
+  ],
+  events: [],
+  performanceNotes:
+    'This is a placeholder effect for testing the multi-effect selector. The actual tilt-shift implementation is coming soon.',
 };
 
 // ---------------------------------------------------------------------------

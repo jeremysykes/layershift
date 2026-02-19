@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Theme — maps existing dark palette to Tailwind/shadcn CSS variables */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  --color-background: #0a0a0a;
+  --color-foreground: #888888;
+  --color-card: #141414;
+  --color-card-foreground: #cccccc;
+  --color-primary: #ffffff;
+  --color-primary-foreground: #0a0a0a;
+  --color-secondary: #1a1a1a;
+  --color-secondary-foreground: #888888;
+  --color-muted: #1a1a1a;
+  --color-muted-foreground: #555555;
+  --color-accent: #222222;
+  --color-accent-foreground: #cccccc;
+  --color-border: #222222;
+  --color-input: #222222;
+  --color-ring: #333333;
+  --radius: 0.5rem;
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base styles (applied after Tailwind preflight)                      */
+/* ------------------------------------------------------------------ */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: #0a0a0a;
+  color: #888;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+a {
+  color: #ccc;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ */
+/* FOUC prevention (matches <head> inline style)                       */
+/* ------------------------------------------------------------------ */
+
+body.ready {
+  visibility: visible;
+}
+
+/* ------------------------------------------------------------------ */
+/* Web Component :not(:defined) — prevent FOUC before registration     */
+/* ------------------------------------------------------------------ */
+
+layershift-parallax:not(:defined),
+layershift-portal:not(:defined) {
+  display: block;
+  background: #000;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reveal animation                                                   */
+/* ------------------------------------------------------------------ */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ------------------------------------------------------------------ */
+/* Effect content fade transition                                      */
+/* ------------------------------------------------------------------ */
+
+.fade-out {
+  opacity: 0 !important;
+  transform: translateY(6px) !important;
+}
+
+.fade-in {
+  opacity: 0 !important;
+  transform: translateY(-6px) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scroll hint bounce animation                                        */
+/* ------------------------------------------------------------------ */
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0) rotate(-45deg); }
+  40% { transform: translateY(6px) rotate(-45deg); }
+  60% { transform: translateY(3px) rotate(-45deg); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Syntax highlighting for code blocks (HTML-colorized spans)          */
+/* ------------------------------------------------------------------ */
+
+.code-highlight .comment { color: #555; }
+.code-highlight .tag { color: #7ec8e3; }
+.code-highlight .attr { color: #c9a0dc; }
+.code-highlight .string { color: #a8d8a8; }
+
+/* ------------------------------------------------------------------ */
+/* Responsive                                                         */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 640px) {
+  .responsive-section {
+    padding: 3rem 1.25rem;
+  }
+}
