@@ -1747,6 +1747,14 @@ export class PortalRenderer {
     // PASS 1: Interior scene → FBO
     // ============================
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.interiorFbo);
+
+    // Guard: skip this frame if FBO attachments are invalid (e.g., context
+    // was restored but FBO not yet rebuilt, or transient resize state).
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return;
+    }
+
     gl.viewport(0, 0, this.fboWidth, this.fboHeight);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
