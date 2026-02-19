@@ -30,6 +30,8 @@ import type {
   LayershiftFrameDetail,
   LayershiftErrorDetail,
 } from './types';
+import { LifecycleManager } from './lifecycle';
+import type { ManagedElement } from './lifecycle';
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -191,7 +193,7 @@ class ComponentInputHandler {
 // Custom Element
 // ---------------------------------------------------------------------------
 
-export class LayershiftElement extends HTMLElement {
+export class LayershiftElement extends HTMLElement implements ManagedElement {
   static readonly TAG_NAME = 'layershift-parallax';
 
   static get observedAttributes(): string[] {
@@ -203,19 +205,21 @@ export class LayershiftElement extends HTMLElement {
     ];
   }
 
+  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta'];
+
   private shadow: ShadowRoot;
   private container: HTMLDivElement | null = null;
   private renderer: ParallaxRenderer | null = null;
   private inputHandler: ComponentInputHandler | null = null;
   private depthWorker: WorkerDepthInterpolator | null = null;
   private video: HTMLVideoElement | null = null;
-  private initialized = false;
-  private abortController: AbortController | null = null;
   private loopCount = 0;
+  private readonly lifecycle: LifecycleManager;
 
   constructor() {
     super();
     this.shadow = this.attachShadow({ mode: 'open' });
+    this.lifecycle = new LifecycleManager(this);
   }
 
   // --- Attribute helpers ---
@@ -293,31 +297,20 @@ export class LayershiftElement extends HTMLElement {
   // --- Lifecycle ---
 
   connectedCallback(): void {
-    this.setupShadowDOM();
-    void this.init();
+    this.lifecycle.onConnected();
   }
 
   disconnectedCallback(): void {
-    this.dispose();
+    this.lifecycle.onDisconnected();
   }
 
-  attributeChangedCallback(_name: string, _oldVal: string | null, _newVal: string | null): void {
-    if (!['src', 'depth-src', 'depth-meta'].includes(_name)) return;
-
-    if (this.initialized) {
-      // Re-initialize with new source attributes
-      this.dispose();
-      this.setupShadowDOM();
-      void this.init();
-    } else if (this.isConnected && this.getAttribute('src') && this.getAttribute('depth-src') && this.getAttribute('depth-meta')) {
-      // First init deferred until all required attributes are set
-      void this.init();
-    }
+  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
+    this.lifecycle.onAttributeChanged(name, oldVal, newVal);
   }
 
   // --- Shadow DOM setup ---
 
-  private setupShadowDOM(): void {
+  setupShadowDOM(): void {
     this.shadow.innerHTML = '';
 
     const style = document.createElement('style');
@@ -351,21 +344,12 @@ export class LayershiftElement extends HTMLElement {
 
   // --- Initialization ---
 
-  private async init(): Promise<void> {
-    const src = this.getAttribute('src');
-    const depthSrc = this.getAttribute('depth-src');
-    const depthMeta = this.getAttribute('depth-meta');
-
-    if (!src || !depthSrc || !depthMeta) {
-      const message = 'src, depth-src, and depth-meta attributes are required.';
-      console.warn(`<layershift-parallax>: ${message}`);
-      this.emit<LayershiftErrorDetail>('layershift-parallax:error', { message });
-      return;
-    }
+  async doInit(signal: AbortSignal): Promise<void> {
+    const src = this.getAttribute('src')!;
+    const depthSrc = this.getAttribute('depth-src')!;
+    const depthMeta = this.getAttribute('depth-meta')!;
 
     if (!this.container) return;
-
-    this.abortController = new AbortController();
 
     try {
       // Load video and depth data in parallel
@@ -374,8 +358,8 @@ export class LayershiftElement extends HTMLElement {
         loadPrecomputedDepth(depthSrc, depthMeta),
       ]);
 
-      // Check if disconnected during loading (abortController is nulled by dispose)
-      if (!this.abortController || this.abortController.signal.aborted) {
+      // Check if cancelled during loading
+      if (signal.aborted) {
         video.remove();
         return;
       }
@@ -424,8 +408,8 @@ export class LayershiftElement extends HTMLElement {
         readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
       }
 
-      // Check if disconnected during worker init
-      if (!this.abortController || this.abortController.signal.aborted) {
+      // Check if cancelled during worker init
+      if (signal.aborted) {
         video.remove();
         this.depthWorker?.dispose();
         this.depthWorker = null;
@@ -484,7 +468,12 @@ export class LayershiftElement extends HTMLElement {
         }
       }
 
-      this.initialized = true;
+      // Final abort check — video.play() is the last await, and abort
+      // could fire during it (Strict Mode unmount). Don't mark as
+      // initialized if the element was disconnected mid-init.
+      if (signal.aborted) return;
+
+      this.lifecycle.markInitialized();
 
       this.emit<LayershiftReadyDetail>('layershift-parallax:ready', {
         videoWidth: video.videoWidth,
@@ -541,10 +530,8 @@ export class LayershiftElement extends HTMLElement {
 
   // --- Cleanup ---
 
-  private dispose(): void {
-    this.abortController?.abort();
-    this.abortController = null;
-
+  doDispose(): void {
+    // Renderer.dispose() handles WebGL context release internally
     this.renderer?.dispose();
     this.renderer = null;
 
@@ -562,7 +549,6 @@ export class LayershiftElement extends HTMLElement {
       this.video = null;
     }
 
-    this.initialized = false;
     this.loopCount = 0;
     this.container = null;
   }
