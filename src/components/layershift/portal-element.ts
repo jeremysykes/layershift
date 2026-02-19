@@ -32,6 +32,8 @@ import type {
   LayershiftPortalFrameDetail,
   LayershiftPortalErrorDetail,
 } from './types';
+import { LifecycleManager } from './lifecycle';
+import type { ManagedElement } from './lifecycle';
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -226,7 +228,7 @@ class ComponentInputHandler {
 // Custom Element
 // ---------------------------------------------------------------------------
 
-export class LayershiftPortalElement extends HTMLElement {
+export class LayershiftPortalElement extends HTMLElement implements ManagedElement {
   static readonly TAG_NAME = 'layershift-portal';
 
   static get observedAttributes(): string[] {
@@ -250,6 +252,8 @@ export class LayershiftPortalElement extends HTMLElement {
     ];
   }
 
+  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'logo-src'];
+
   private shadow: ShadowRoot;
   private container: HTMLDivElement | null = null;
   private renderer: PortalRenderer | null = null;
@@ -257,13 +261,13 @@ export class LayershiftPortalElement extends HTMLElement {
   private depthWorker: WorkerDepthInterpolator | null = null;
   private video: HTMLVideoElement | null = null;
   private mesh: ShapeMesh | null = null;
-  private initialized = false;
-  private abortController: AbortController | null = null;
   private loopCount = 0;
+  private readonly lifecycle: LifecycleManager;
 
   constructor() {
     super();
     this.shadow = this.attachShadow({ mode: 'open' });
+    this.lifecycle = new LifecycleManager(this);
   }
 
   // --- Attribute helpers ---
@@ -384,39 +388,23 @@ export class LayershiftPortalElement extends HTMLElement {
     });
   }
 
-  // --- Lifecycle ---
+  // --- Lifecycle (delegated to LifecycleManager) ---
 
   connectedCallback(): void {
-    this.setupShadowDOM();
-    void this.init();
+    this.lifecycle.onConnected();
   }
 
   disconnectedCallback(): void {
-    this.dispose();
+    this.lifecycle.onDisconnected();
   }
 
-  attributeChangedCallback(_name: string, _oldVal: string | null, _newVal: string | null): void {
-    const reinitAttrs = ['src', 'depth-src', 'depth-meta', 'logo-src'];
-    if (!reinitAttrs.includes(_name)) return;
-
-    if (this.initialized) {
-      this.dispose();
-      this.setupShadowDOM();
-      void this.init();
-    } else if (
-      this.isConnected &&
-      this.getAttribute('src') &&
-      this.getAttribute('depth-src') &&
-      this.getAttribute('depth-meta') &&
-      this.getAttribute('logo-src')
-    ) {
-      void this.init();
-    }
+  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
+    this.lifecycle.onAttributeChanged(name, oldVal, newVal);
   }
 
-  // --- Shadow DOM ---
+  // --- Shadow DOM setup ---
 
-  private setupShadowDOM(): void {
+  setupShadowDOM(): void {
     this.shadow.innerHTML = '';
 
     const style = document.createElement('style');
@@ -450,22 +438,13 @@ export class LayershiftPortalElement extends HTMLElement {
 
   // --- Initialization ---
 
-  private async init(): Promise<void> {
-    const src = this.getAttribute('src');
-    const depthSrc = this.getAttribute('depth-src');
-    const depthMeta = this.getAttribute('depth-meta');
-    const logoSrc = this.getAttribute('logo-src');
-
-    if (!src || !depthSrc || !depthMeta || !logoSrc) {
-      const message = 'src, depth-src, depth-meta, and logo-src attributes are required.';
-      console.warn(`<layershift-portal>: ${message}`);
-      this.emit<LayershiftPortalErrorDetail>('layershift-portal:error', { message });
-      return;
-    }
+  async doInit(signal: AbortSignal): Promise<void> {
+    const src = this.getAttribute('src')!;
+    const depthSrc = this.getAttribute('depth-src')!;
+    const depthMeta = this.getAttribute('depth-meta')!;
+    const logoSrc = this.getAttribute('logo-src')!;
 
     if (!this.container) return;
-
-    this.abortController = new AbortController();
 
     try {
       // Load video, depth data, and SVG mesh in parallel
@@ -475,8 +454,8 @@ export class LayershiftPortalElement extends HTMLElement {
         generateMeshFromSVG(logoSrc),
       ]);
 
-      // Check if disconnected during loading (abortController is nulled by dispose)
-      if (!this.abortController || this.abortController.signal.aborted) {
+      // Check if cancelled during loading
+      if (signal.aborted) {
         video.remove();
         return;
       }
@@ -508,7 +487,8 @@ export class LayershiftPortalElement extends HTMLElement {
         readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
       }
 
-      if (!this.abortController || this.abortController.signal.aborted) {
+      // Check if cancelled during worker init
+      if (signal.aborted) {
         video.remove();
         this.depthWorker?.dispose();
         this.depthWorker = null;
@@ -597,7 +577,7 @@ export class LayershiftPortalElement extends HTMLElement {
         try { await video.play(); } catch { /* Autoplay blocked */ }
       }
 
-      this.initialized = true;
+      this.lifecycle.markInitialized();
 
       this.emit<LayershiftPortalReadyDetail>('layershift-portal:ready', {
         videoWidth: video.videoWidth,
@@ -651,10 +631,8 @@ export class LayershiftPortalElement extends HTMLElement {
 
   // --- Cleanup ---
 
-  private dispose(): void {
-    this.abortController?.abort();
-    this.abortController = null;
-
+  doDispose(): void {
+    // Renderer.dispose() handles WebGL context release internally
     this.renderer?.dispose();
     this.renderer = null;
 
@@ -673,7 +651,6 @@ export class LayershiftPortalElement extends HTMLElement {
     }
 
     this.mesh = null;
-    this.initialized = false;
     this.loopCount = 0;
     this.container = null;
   }

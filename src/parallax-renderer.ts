@@ -650,6 +650,15 @@ export class ParallaxRenderer {
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
 
+    // Explicitly release the WebGL context to free GPU resources.
+    // Without this, contexts leak until the canvas is garbage collected.
+    if (this.gl) {
+      const ext = this.gl.getExtension('WEBGL_lose_context');
+      ext?.loseContext();
+      this.gl = null;
+    }
+    this.canvas.remove();
+
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
