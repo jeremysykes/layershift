@@ -344,9 +344,9 @@ This controls how "deep" the portal feels. A telephoto portal creates a long tun
 | `src/components/layershift/portal-element.ts` | Add interior-scene attributes, second video/depth initialization, dual worker management |
 | `src/components/layershift/types.ts` | Add interior-scene props and events |
 | `src/site/effect-content.ts` | Update description, add new attributes to config table |
-| `docs/portal/portal-overview.md` | Full API update |
-| `docs/diagrams/portal-render-pipeline.md` | New 5-pass pipeline diagram |
-| `docs/adr/ADR-006-portal-v2-compositing.md` | Design decisions for the rewrite |
+| [portal-overview.md](./portal-overview.md) | Full API update |
+| [portal-render-pipeline.md](../diagrams/portal-render-pipeline.md) | New 5-pass pipeline diagram |
+| [ADR-006](../adr/ADR-006-portal-v4-emissive-chamfer-nesting.md) | Design decisions for the rewrite |
 
 ### What Stays the Same
 

@@ -90,4 +90,6 @@ export interface EffectContent {
   prepareVideoCode?: string;
   /** Prepare your video intro text (optional) */
   prepareVideoIntro?: string;
+  /** Deep link to architecture docs for this effect (optional) */
+  docsLink?: string;
 }

@@ -71,4 +71,4 @@ Rejected: Automatic GPU cost escalation. Performance guarantees must not depend 
 - `src/components/layershift/layershift-element.ts` — analysis call in `init()`, override detection via `hasAttribute()`
 - `src/components/layershift/types.ts` — extended ready event with `depthProfile` and `derivedParams`
 
-See `docs/diagrams/depth-parameter-derivation.md` for the derivation data flow diagram.
+See [depth parameter derivation diagram](../diagrams/depth-parameter-derivation.md) for the derivation data flow diagram.

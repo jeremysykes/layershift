@@ -1,8 +1,12 @@
 {
-  "buildCommand": "npm run build && npm run build:component",
+  "buildCommand": "npm run build && npm run build:docs && npm run build:component",
   "outputDirectory": "dist",
   "framework": "vite",
   "headers": [
+    {
+      "source": "/docs/(.*)",
+      "headers": []
+    },
     {
       "source": "/(.*)",
       "headers": [

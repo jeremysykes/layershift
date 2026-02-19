@@ -1,0 +1,190 @@
+/* ------------------------------------------------------------------ */
+/* Layershift VitePress theme — matches the product site palette       */
+/* Source of truth: src/site/globals.css                                */
+/* ------------------------------------------------------------------ */
+
+:root {
+  --vp-font-family-base: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+.dark {
+  /* Backgrounds */
+  --vp-c-bg: #0a0a0a;
+  --vp-c-bg-alt: #111111;
+  --vp-c-bg-elv: #141414;
+  --vp-c-bg-soft: #141414;
+
+  /* Text */
+  --vp-c-text-1: #ffffff;
+  --vp-c-text-2: #888888;
+  --vp-c-text-3: #555555;
+
+  /* Borders & dividers */
+  --vp-c-border: #222222;
+  --vp-c-divider: #1a1a1a;
+  --vp-c-gutter: #1a1a1a;
+
+  /* Brand / accent — white, matching the site's primary */
+  --vp-c-brand-1: #cccccc;
+  --vp-c-brand-2: #ffffff;
+  --vp-c-brand-3: #ffffff;
+  --vp-c-brand-soft: rgba(255, 255, 255, 0.06);
+
+  /* Code blocks */
+  --vp-code-block-bg: #141414;
+  --vp-code-line-highlight-color: rgba(255, 255, 255, 0.04);
+  --vp-code-tab-divider: #222222;
+  --vp-code-copy-code-bg: #1a1a1a;
+  --vp-code-copy-code-hover-bg: #222222;
+
+  /* Sidebar */
+  --vp-sidebar-bg-color: #0a0a0a;
+
+  /* Nav */
+  --vp-nav-bg-color: rgba(10, 10, 10, 0.85);
+
+  /* Custom property overrides */
+  --vp-c-default-1: #222222;
+  --vp-c-default-2: #1a1a1a;
+  --vp-c-default-3: #141414;
+  --vp-c-default-soft: rgba(255, 255, 255, 0.04);
+}
+
+/* ------------------------------------------------------------------ */
+/* Nav bar — match StickyNav styling                                   */
+/* ------------------------------------------------------------------ */
+
+.VPNav {
+  border-bottom: 1px solid #1a1a1a !important;
+}
+
+.VPNavBar {
+  background: rgba(10, 10, 10, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar — subtle, receding                                          */
+/* ------------------------------------------------------------------ */
+
+.VPSidebar {
+  background: #0a0a0a !important;
+  border-right: 1px solid #1a1a1a !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Content — typography matching the product site                      */
+/* ------------------------------------------------------------------ */
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.vp-doc a {
+  color: #ccc;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.vp-doc a:hover {
+  color: #fff;
+}
+
+.vp-doc p,
+.vp-doc li {
+  color: #888;
+  line-height: 1.6;
+}
+
+.vp-doc strong {
+  color: #ccc;
+}
+
+/* Tables — match config-table styling */
+.vp-doc table {
+  border-collapse: collapse;
+}
+
+.vp-doc th {
+  color: #ccc;
+  background: #141414;
+}
+
+.vp-doc td {
+  color: #888;
+}
+
+.vp-doc th,
+.vp-doc td {
+  border-color: #222;
+}
+
+.vp-doc tr {
+  border-color: #1a1a1a;
+}
+
+/* Blockquotes — used for callouts in the docs */
+.vp-doc blockquote {
+  border-left-color: #333;
+  color: #777;
+}
+
+/* Inline code */
+.vp-doc :not(pre) > code {
+  background: #1a1a1a;
+  color: #ccc;
+}
+
+/* ------------------------------------------------------------------ */
+/* Focus-visible — match the product site                              */
+/* ------------------------------------------------------------------ */
+
+:focus-visible {
+  outline: 2px solid #555;
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scrollbar — subtle                                                  */
+/* ------------------------------------------------------------------ */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hide the appearance toggle (dark-only site)                         */
+/* ------------------------------------------------------------------ */
+
+.VPNavBarAppearance,
+.VPSwitchAppearance {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Font smoothing — match the product site                             */
+/* ------------------------------------------------------------------ */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
