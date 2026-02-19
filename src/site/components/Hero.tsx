@@ -43,10 +43,10 @@ export function Hero() {
         style={{ willChange: 'opacity, transform' }}
       >
         <EffectErrorBoundary
+          key={content.tagName}
           fallback={<div style={{ width: '100%', height: '100%', background: '#000' }} />}
         >
           <LayershiftEffect
-            key={content.tagName}
             tagName={content.tagName}
             attrs={heroAttrs}
           />

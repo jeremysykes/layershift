@@ -56,6 +56,7 @@ export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
     >
       {visible && (
         <EffectErrorBoundary
+          key={tagName}
           fallback={
             <div
               className="flex flex-col items-center justify-center gap-2"
