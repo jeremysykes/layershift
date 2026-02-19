@@ -475,7 +475,8 @@ export class LayershiftPortalElement extends HTMLElement {
         generateMeshFromSVG(logoSrc),
       ]);
 
-      if (this.abortController.signal.aborted) {
+      // Check if disconnected during loading (abortController is nulled by dispose)
+      if (!this.abortController || this.abortController.signal.aborted) {
         video.remove();
         return;
       }
@@ -507,7 +508,7 @@ export class LayershiftPortalElement extends HTMLElement {
         readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
       }
 
-      if (this.abortController.signal.aborted) {
+      if (!this.abortController || this.abortController.signal.aborted) {
         video.remove();
         this.depthWorker?.dispose();
         this.depthWorker = null;

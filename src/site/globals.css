@@ -198,6 +198,13 @@ layershift-portal:not(:defined) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Hide scrollbar — for horizontal filmstrip containers               */
+/* ------------------------------------------------------------------ */
+
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ------------------------------------------------------------------ */
 /* Focus-visible — visible ring for keyboard users, hidden for mouse  */
 /* ------------------------------------------------------------------ */
 

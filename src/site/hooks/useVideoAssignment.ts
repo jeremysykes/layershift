@@ -33,23 +33,50 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 /**
+ * Returns the video pool for the current effect's category.
+ */
+export function getVideosForEffect(
+  videos: VideoManifest,
+  activeEffect: string,
+): VideoEntry[] {
+  const category = EFFECT_VIDEO_CATEGORY[activeEffect] ?? 'parallax';
+  return videos[category];
+}
+
+/**
  * Returns shuffled hero + demo video entries for the active effect.
  *
  * On the initial render, prefers the preloaded hero video (selected by the
  * inline script in index.html) so the browser's early-fetched assets are
  * actually utilized. Reshuffles normally when the active effect changes.
+ *
+ * When `selectedVideoId` is provided, the demo video is forced to that entry.
  */
 export function useVideoAssignment(
   videos: VideoManifest,
   activeEffect: string,
+  selectedVideoId: string | null = null,
 ): { heroVideo: VideoEntry | null; demoVideo: VideoEntry | null } {
   // Capture the effect at first mount — preloaded hero only applies here.
   const [initialEffect] = useState(activeEffect);
 
   return useMemo(() => {
-    const category = EFFECT_VIDEO_CATEGORY[activeEffect] ?? 'parallax';
-    const pool = videos[category];
+    const pool = getVideosForEffect(videos, activeEffect);
     if (!pool.length) return { heroVideo: null, demoVideo: null };
+
+    // If user explicitly selected a video, use it for the demo
+    if (selectedVideoId) {
+      const selected = pool.find((v) => v.id === selectedVideoId);
+      if (selected) {
+        const heroPool = pool.filter((v) => v.id !== selectedVideoId);
+        return {
+          heroVideo: heroPool.length
+            ? heroPool[Math.floor(Math.random() * heroPool.length)]
+            : selected,
+          demoVideo: selected,
+        };
+      }
+    }
 
     // Use the preloaded hero on the initial effect so the <link rel="preload">
     // injected by index.html is consumed by the rendered hero component.
@@ -72,5 +99,5 @@ export function useVideoAssignment(
       heroVideo: shuffled[0],
       demoVideo: shuffled[1 % shuffled.length],
     };
-  }, [videos, activeEffect, initialEffect]);
+  }, [videos, activeEffect, initialEffect, selectedVideoId]);
 }
