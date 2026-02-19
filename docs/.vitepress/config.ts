@@ -99,5 +99,11 @@ export default withMermaid(
     mermaidPlugin: {
       class: 'mermaid',
     },
+
+    vite: {
+      server: {
+        port: 5174,
+      },
+    },
   })
 )

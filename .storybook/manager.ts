@@ -6,7 +6,7 @@ const layershiftTheme = create({
 
   // Brand
   brandTitle: 'layershift components',
-  brandUrl: 'https://layershift.io',
+  brandUrl: './',
   brandTarget: '_self',
 
   // Colors

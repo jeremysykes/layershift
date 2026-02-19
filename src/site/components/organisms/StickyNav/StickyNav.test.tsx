@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StickyNav } from './StickyNav';
 import { useSiteStore } from '../../../store';
+import { DOCS_URL } from '../../../lib/nav';
 
 beforeEach(() => {
   useSiteStore.setState({
@@ -31,7 +32,7 @@ describe('StickyNav', () => {
     render(<StickyNav />);
     const docsLink = screen.getByRole('link', { name: /docs/i });
     expect(docsLink).toBeInTheDocument();
-    expect(docsLink).toHaveAttribute('href', '/docs/');
+    expect(docsLink).toHaveAttribute('href', DOCS_URL);
   });
 
   it('contains a GitHub link', () => {

@@ -1,4 +1,5 @@
 import { Github } from 'lucide-react';
+import { DOCS_URL, STORYBOOK_URL } from '../../../lib/nav';
 
 export function Footer() {
   return (
@@ -20,14 +21,14 @@ export function Footer() {
           </a>
         </span>
         <a
-          href="/docs/"
+          href={DOCS_URL}
           className="hover:text-white transition-colors"
           style={{ color: '#777' }}
         >
           Docs
         </a>
         <a
-          href="/storybook/"
+          href={STORYBOOK_URL}
           className="hover:text-white transition-colors"
           style={{ color: '#777' }}
         >

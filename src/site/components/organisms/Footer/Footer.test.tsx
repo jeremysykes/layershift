@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { Footer } from './Footer';
+import { DOCS_URL } from '../../../lib/nav';
 
 describe('Footer', () => {
   it('renders a footer element', () => {
@@ -17,7 +18,7 @@ describe('Footer', () => {
     render(<Footer />);
     const docsLink = screen.getByRole('link', { name: /docs/i });
     expect(docsLink).toBeInTheDocument();
-    expect(docsLink).toHaveAttribute('href', '/docs/');
+    expect(docsLink).toHaveAttribute('href', DOCS_URL);
   });
 
   it('contains a GitHub icon link', () => {

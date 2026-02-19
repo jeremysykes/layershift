@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Github } from 'lucide-react';
 import { EffectSelector } from '../../molecules/EffectSelector';
+import { DOCS_URL, STORYBOOK_URL } from '../../../lib/nav';
 
 /**
  * Sticky navigation header that slides in after scrolling past the hero.
@@ -51,14 +52,14 @@ export function StickyNav() {
 
         <div className="flex items-center gap-3">
           <a
-            href="/docs/"
+            href={DOCS_URL}
             className="text-xs hover:text-white transition-colors"
             style={{ color: '#777' }}
           >
             Docs
           </a>
           <a
-            href="/storybook/"
+            href={STORYBOOK_URL}
             className="text-xs hover:text-white transition-colors"
             style={{ color: '#777' }}
           >
