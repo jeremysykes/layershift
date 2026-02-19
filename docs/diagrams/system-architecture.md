@@ -13,13 +13,16 @@ graph TD
 
         subgraph "Effects"
             PARALLAX["Parallax Effect<br/><code>&lt;layershift-parallax&gt;</code>"]
+            PORTAL["Portal Effect<br/><code>&lt;layershift-portal&gt;</code>"]
             FUTURE["Future Effects<br/><i>planned</i>"]
         end
     end
 
     CORE --> PARALLAX
+    CORE --> PORTAL
     CORE --> FUTURE
     DEPTH --> PARALLAX
+    DEPTH --> PORTAL
     DEPTH --> FUTURE
 
     subgraph "Consumers"
@@ -35,6 +38,12 @@ graph TD
     PARALLAX --> VUE
     PARALLAX --> SVELTE
     PARALLAX --> ANGULAR
+
+    PORTAL --> HTML
+    PORTAL --> REACT
+    PORTAL --> VUE
+    PORTAL --> SVELTE
+    PORTAL --> ANGULAR
 ```
 
 ## Module Dependency Graph
@@ -43,11 +52,14 @@ graph TD
 graph TD
     MAIN["main.ts<br/><i>demo app</i>"]
     SITE["site/main.ts<br/><i>landing page</i>"]
-    ELEMENT["layershift-element.ts<br/><i>Web Component</i>"]
+    ELEMENT["layershift-element.ts<br/><i>Parallax Web Component</i>"]
+    PORTAL_EL["portal-element.ts<br/><i>Portal Web Component</i>"]
 
     DA["depth-analysis.ts<br/><i>parameter derivation</i>"]
     PD["precomputed-depth.ts<br/><i>binary loading + interpolation</i>"]
     PR["parallax-renderer.ts<br/><i>GPU pipeline</i>"]
+    PTR["portal-renderer.ts<br/><i>stencil pipeline</i>"]
+    SG["shape-generator.ts<br/><i>SVG → GPU mesh</i>"]
     DW["depth-worker.ts<br/><i>bilateral filter worker</i>"]
     IH["input-handler.ts<br/><i>mouse / gyro</i>"]
     VS["video-source.ts<br/><i>video element</i>"]
@@ -66,11 +78,18 @@ graph TD
     ELEMENT --> PD
     ELEMENT --> PR
 
+    PORTAL_EL --> PD
+    PORTAL_EL --> PTR
+    PORTAL_EL --> SG
+
     PD --> DW
 
     SITE --> ELEMENT
+    SITE --> PORTAL_EL
 
     style DA fill:#e1f5fe
     style DW fill:#fff3e0
     style PR fill:#f3e5f5
+    style PTR fill:#f3e5f5
+    style SG fill:#e8f5e9
 ```

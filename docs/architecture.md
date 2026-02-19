@@ -4,7 +4,11 @@
 
 Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via WebGL 2. Effects are embeddable in any framework or plain HTML as a single IIFE bundle with zero runtime dependencies.
 
-**Parallax** (`<layershift-parallax>`) is the first effect — depth-aware parallax motion driven by mouse or gyroscope input using precomputed depth maps. Future effects will share the same core infrastructure (input handling, video loading, depth system, build pipeline).
+**Parallax** (`<layershift-parallax>`) is the first effect — depth-aware parallax motion driven by mouse or gyroscope input using precomputed depth maps.
+
+**Portal** (`<layershift-portal>`) is the second effect — video revealed through an SVG-shaped cutout with depth-aware parallax, dimensional typography (JFA distance field, bevel lighting, geometric chamfer with Blinn-Phong shading, emissive interior), and depth-reactive boundary effects. Uses a multi-pass WebGL 2 stencil + FBO compositing pipeline.
+
+Both effects share core infrastructure (input handling, video loading, depth system, build pipeline).
 
 See `docs/diagrams/system-architecture.md` for the visual library structure and dependency graph.
 
@@ -19,7 +23,8 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | File | Scope | Purpose |
 |------|-------|---------|
 | `index.ts` | Library | Entry point, registers effect elements |
-| `layershift-element.ts` | Parallax | Web Component (Shadow DOM, lifecycle, events) |
+| `layershift-element.ts` | Parallax | Parallax Web Component (Shadow DOM, lifecycle, events) |
+| `portal-element.ts` | Portal | Portal Web Component (Shadow DOM, lifecycle, events) |
 | `types.ts` | Library | Public TypeScript interfaces |
 | `global.d.ts` | Library | JSX type augmentation |
 | `wrappers/react.tsx` | Library | React adapter |
@@ -33,6 +38,8 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | File | Scope | Purpose |
 |------|-------|---------|
 | `parallax-renderer.ts` | Parallax | WebGL 2 renderer, GLSL shaders, render loops |
+| `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects) |
+| `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
 | `depth-worker.ts` | Shared | Web Worker for bilateral filter + interpolation |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, interpolation |
@@ -102,7 +109,58 @@ See `docs/diagrams/depth-parameter-derivation.md` for the data flow and preceden
 
 **Override precedence:** `explicitConfig ?? derivedParams ?? calibratedDefaults`
 
-## Web Component
+## Portal Effect
+
+### Initialization
+
+See `docs/diagrams/portal-initialization.md` for the full sequence diagram.
+
+1. **Asset loading** (parallel): video element + binary depth data + SVG mesh generation
+2. **Depth interpolator**: Web Worker preferred, main-thread fallback
+3. **Renderer setup**: WebGL 2 context (stencil: true), 8 shader programs, logo mesh VBO+IBO, edge mesh VBO, chamfer mesh VBO, FBO with MRT, JFA distance field textures
+4. **Render loop start**: RAF + RVFC registration
+
+### Render Pipeline
+
+See `docs/diagrams/portal-render-pipeline.md` for the multi-pass pipeline diagram.
+
+Multi-pass stencil + FBO compositing (same dual-loop architecture as parallax):
+
+1. **Interior FBO**: Render depth-displaced video with POM, lens transform, DOF, fog, color grading into off-screen framebuffer. Outputs color + depth textures via MRT.
+2. **Stencil mark**: Render triangulated SVG mesh into stencil buffer (no color writes).
+3. **JFA distance field** (on resize only): Binary mask → edge seed → jump flood iterations → scalar distance texture. Cached until viewport changes.
+4. **Emissive composite** (stencil-tested): Pass interior FBO through with subtle edge occlusion ramp. Portal video preserves original luminance — no multiplicative lighting.
+5. **Chamfer geometry** (opaque, no stencil): Render geometric chamfer ring around letter silhouettes with Blinn-Phong lighting, smooth per-vertex normals, and frosted-glass video passthrough via progressive blur.
+6. **Boundary effects** (alpha blended): Depth-reactive rim lighting, refraction, chromatic fringe, occlusion, volumetric edge wall — all driven by distance field and interior depth texture.
+
+### Key Shader Programs
+
+| Program | Purpose |
+|---------|---------|
+| Interior | POM displacement + lens transform + DOF + fog → FBO (MRT: color + depth) |
+| Stencil | Logo mesh → stencil buffer only |
+| Mask | Logo mesh → binary R8 texture for JFA |
+| JFA Seed | Edge detection from binary mask → seed coordinates |
+| JFA Flood | Jump flood iterations (ping-pong) → nearest edge propagation |
+| JFA Distance | Seed coordinates → scalar distance texture |
+| Composite | Emissive interior passthrough + edge occlusion ramp (stencil-tested) |
+| Chamfer | Geometric chamfer ring with Blinn-Phong + video blur passthrough |
+| Boundary | Depth-reactive rim, refraction, chromatic fringe, volumetric edge wall |
+
+### SVG → GPU Mesh Pipeline
+
+`src/shape-generator.ts` converts SVG files to GPU-ready triangle meshes:
+1. Fetch and parse SVG with DOMParser
+2. Extract path/polygon/rect/circle/ellipse elements
+3. Parse SVG path commands (M, L, H, V, C, S, Q, T, A, Z)
+4. Flatten Bezier curves via adaptive De Casteljau subdivision
+5. Normalize coordinates to [-1, 1] range (with Y-flip for clip space)
+6. Classify contours as outer/hole via **geometric nesting depth** (winding-independent)
+7. Group outer contours with their holes for correct triangulation
+8. Triangulate each group with vendored earcut algorithm
+9. Extract edge outline vertices, contour offsets, and hole flags for chamfer + boundary passes
+
+## Web Components
 
 ### Element: `<layershift-parallax>`
 
@@ -125,6 +183,42 @@ Shadow DOM encapsulates a `<canvas>` (WebGL 2) and hidden `<video>`.
 | `layershift-parallax:error` | message |
 
 **Override detection:** `hasAttribute('parallax-max')` or `hasAttribute('overscan')` causes the explicit attribute to take precedence over depth-derived values.
+
+### Element: `<layershift-portal>`
+
+Shadow DOM encapsulates a `<canvas>` (WebGL 2 with stencil) and hidden `<video>`.
+
+**Observed attributes:**
+- `src`, `depth-src`, `depth-meta` (required asset paths)
+- `logo-src` (required SVG shape path)
+- `parallax-x`, `parallax-y`, `parallax-max`, `overscan` (parallax tuning)
+- `pom-steps` (POM ray-march steps for interior)
+- `rim-intensity`, `rim-color`, `rim-width` (depth-reactive rim lighting)
+- `refraction-strength`, `chromatic-strength`, `occlusion-intensity` (boundary effects)
+- `depth-power`, `depth-scale`, `depth-bias` (lens transform)
+- `fog-density`, `fog-color`, `color-shift`, `brightness-bias` (interior mood)
+- `contrast-low`, `contrast-high`, `vertical-reduction`, `dof-start`, `dof-strength` (depth-adaptive)
+- `bevel-intensity`, `bevel-width`, `bevel-darkening`, `bevel-desaturation`, `bevel-light-angle` (dimensional typography)
+- `edge-thickness`, `edge-specular`, `edge-color` (volumetric edge wall)
+- `chamfer-width`, `chamfer-angle`, `chamfer-color`, `chamfer-ambient`, `chamfer-specular`, `chamfer-shininess` (geometric chamfer)
+- `edge-occlusion-width`, `edge-occlusion-strength` (emissive interior edge ramp)
+- `light-direction` (3D light for chamfer Blinn-Phong)
+- `autoplay`, `loop`, `muted` (video behavior)
+
+**Transparent background**: The portal canvas uses `alpha: true` with `premultipliedAlpha: true`. Areas outside the logo shape are fully transparent, allowing the element to be overlaid on any HTML content via CSS stacking.
+
+**Custom events** (composed, bubble through shadow boundary):
+
+| Event | Detail |
+|-------|--------|
+| `layershift-portal:ready` | videoWidth, videoHeight, duration |
+| `layershift-portal:play` | currentTime |
+| `layershift-portal:pause` | currentTime |
+| `layershift-portal:loop` | loopCount |
+| `layershift-portal:frame` | currentTime, frameNumber |
+| `layershift-portal:error` | message |
+
+See `docs/portal/portal-overview.md` for full API reference.
 
 ### Framework Wrappers
 
@@ -172,19 +266,21 @@ See `docs/diagrams/build-system.md` for the build flow diagram.
 
 ### Component Build (vite.config.component.ts)
 
-Produces a single IIFE file with zero runtime dependencies. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` element.
+Produces a single IIFE file with zero runtime dependencies. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` or `<layershift-portal>` element.
 
 ## Performance Characteristics
 
-| Metric | Value |
-|--------|-------|
-| Init depth analysis | <5ms |
-| Bilateral filter per depth frame | 5-15ms (in Worker) |
-| Render draw calls per frame | 1 |
-| Depth texture upload frequency | ~5fps (keyframe rate) |
-| Depth texture size | 512x512 Uint8 (~256KB) |
-| Bundle size (gzipped) | ~40KB |
-| Runtime dependencies | None (pure WebGL 2) |
+| Metric | Parallax | Portal |
+|--------|----------|--------|
+| Init depth analysis | <5ms | N/A |
+| SVG mesh generation | N/A | <10ms |
+| JFA distance field (on resize) | N/A | ~0.5ms (~13 draw calls, half-res) |
+| Bilateral filter per depth frame | 5-15ms (in Worker) | 5-15ms (in Worker) |
+| Render draw calls per frame | 1 | ~6 (interior FBO, stencil, composite, chamfer, boundary) |
+| Depth texture upload frequency | ~5fps (keyframe rate) | ~5fps (keyframe rate) |
+| Depth texture size | 512x512 Uint8 (~256KB) | 512x512 Uint8 (~256KB) |
+| Bundle size IIFE (gzipped) | ~19KB | ~29KB (combined) |
+| Runtime dependencies | None (pure WebGL 2) | None (pure WebGL 2) |
 
 ## Documentation Map
 
@@ -204,9 +300,17 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (superseded by ADR-004) |
 | `docs/adr/ADR-004-*.md` | Three.js to pure WebGL 2 migration |
 | `docs/adr/ADR-003-*.md` | Staging via Vercel preview deployments |
+| `docs/adr/ADR-005-*.md` | Logo Depth Portal effect design decisions |
+| `docs/adr/ADR-006-*.md` | Portal v4: emissive interior, geometric chamfer, nesting-based hole detection |
 | **Parallax Effect** | |
 | `docs/parallax/depth-derivation-rules.md` | Inviolable derivation system rules |
 | `docs/parallax/depth-analysis-skills.md` | Formal function specifications |
 | `docs/parallax/depth-derivation-architecture.md` | Depth subsystem integration details |
 | `docs/parallax/depth-derivation-testability.md` | Testing strategy and snapshot approach |
 | `docs/parallax/depth-derivation-self-audit.md` | Implementation verification audit |
+| **Portal Effect** | |
+| `docs/portal/portal-overview.md` | Effect overview, API reference, usage guide |
+| `docs/portal/portal-v2-design.md` | Historical v2 design document (dual-scene compositing) |
+| `docs/portal/portal-v3-dimensional-typography.md` | Historical v3 design document (JFA distance field, bevel) |
+| `docs/diagrams/portal-initialization.md` | Portal init sequence diagram |
+| `docs/diagrams/portal-render-pipeline.md` | Multi-pass render pipeline diagram |

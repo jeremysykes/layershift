@@ -1,44 +1,60 @@
-[
-  {
-    "id": "fashion-rain",
-    "src": "/videos/fashion-rain/video.mp4",
-    "depthSrc": "/videos/fashion-rain/depth-data.bin",
-    "depthMeta": "/videos/fashion-rain/depth-meta.json"
-  },
-  {
-    "id": "sneaker-drop",
-    "src": "/videos/sneaker-drop/video.mp4",
-    "depthSrc": "/videos/sneaker-drop/depth-data.bin",
-    "depthMeta": "/videos/sneaker-drop/depth-meta.json"
-  },
-  {
-    "id": "luxury-perfume",
-    "src": "/videos/luxury-perfume/video.mp4",
-    "depthSrc": "/videos/luxury-perfume/depth-data.bin",
-    "depthMeta": "/videos/luxury-perfume/depth-meta.json"
-  },
-  {
-    "id": "canyon-car",
-    "src": "/videos/canyon-car/video.mp4",
-    "depthSrc": "/videos/canyon-car/depth-data.bin",
-    "depthMeta": "/videos/canyon-car/depth-meta.json"
-  },
-  {
-    "id": "modern-interior",
-    "src": "/videos/modern-interior/video.mp4",
-    "depthSrc": "/videos/modern-interior/depth-data.bin",
-    "depthMeta": "/videos/modern-interior/depth-meta.json"
-  },
-  {
-    "id": "whiskey-glass",
-    "src": "/videos/whiskey-glass/video.mp4",
-    "depthSrc": "/videos/whiskey-glass/depth-data.bin",
-    "depthMeta": "/videos/whiskey-glass/depth-meta.json"
-  },
-  {
-    "id": "tech-product",
-    "src": "/videos/tech-product/video.mp4",
-    "depthSrc": "/videos/tech-product/depth-data.bin",
-    "depthMeta": "/videos/tech-product/depth-meta.json"
-  }
-]
+{
+  "parallax": [
+    {
+      "id": "fashion-rain",
+      "src": "/videos/parallax/fashion-rain/video.mp4",
+      "depthSrc": "/videos/parallax/fashion-rain/depth-data.bin",
+      "depthMeta": "/videos/parallax/fashion-rain/depth-meta.json"
+    },
+    {
+      "id": "sneaker-drop",
+      "src": "/videos/parallax/sneaker-drop/video.mp4",
+      "depthSrc": "/videos/parallax/sneaker-drop/depth-data.bin",
+      "depthMeta": "/videos/parallax/sneaker-drop/depth-meta.json"
+    },
+    {
+      "id": "luxury-perfume",
+      "src": "/videos/parallax/luxury-perfume/video.mp4",
+      "depthSrc": "/videos/parallax/luxury-perfume/depth-data.bin",
+      "depthMeta": "/videos/parallax/luxury-perfume/depth-meta.json"
+    },
+    {
+      "id": "canyon-car",
+      "src": "/videos/parallax/canyon-car/video.mp4",
+      "depthSrc": "/videos/parallax/canyon-car/depth-data.bin",
+      "depthMeta": "/videos/parallax/canyon-car/depth-meta.json"
+    },
+    {
+      "id": "modern-interior",
+      "src": "/videos/parallax/modern-interior/video.mp4",
+      "depthSrc": "/videos/parallax/modern-interior/depth-data.bin",
+      "depthMeta": "/videos/parallax/modern-interior/depth-meta.json"
+    },
+    {
+      "id": "whiskey-glass",
+      "src": "/videos/parallax/whiskey-glass/video.mp4",
+      "depthSrc": "/videos/parallax/whiskey-glass/depth-data.bin",
+      "depthMeta": "/videos/parallax/whiskey-glass/depth-meta.json"
+    },
+    {
+      "id": "tech-product",
+      "src": "/videos/parallax/tech-product/video.mp4",
+      "depthSrc": "/videos/parallax/tech-product/depth-data.bin",
+      "depthMeta": "/videos/parallax/tech-product/depth-meta.json"
+    }
+  ],
+  "textural": [
+    {
+      "id": "liquid-chrome",
+      "src": "/videos/textural/liquid-chrome/video.mp4",
+      "depthSrc": "/videos/textural/liquid-chrome/depth-data.bin",
+      "depthMeta": "/videos/textural/liquid-chrome/depth-meta.json"
+    },
+    {
+      "id": "neon-energy",
+      "src": "/videos/textural/neon-energy/video.mp4",
+      "depthSrc": "/videos/textural/neon-energy/depth-data.bin",
+      "depthMeta": "/videos/textural/neon-energy/depth-meta.json"
+    }
+  ]
+}
