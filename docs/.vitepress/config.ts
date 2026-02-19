@@ -7,6 +7,7 @@ export default withMermaid(
     description: 'Architecture and API reference for the Layershift video effects library',
     base: '/docs/',
     outDir: '../dist/docs',
+    cleanUrls: true,
     srcDir: '.',
     srcExclude: ['.vitepress/**'],
 

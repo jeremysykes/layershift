@@ -2,6 +2,7 @@
   "buildCommand": "npm run build && npm run build:docs && npm run build:storybook && npm run build:component",
   "outputDirectory": "dist",
   "framework": "vite",
+  "cleanUrls": true,
   "headers": [
     {
       "source": "/(.*)",
