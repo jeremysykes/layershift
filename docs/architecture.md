@@ -10,11 +10,11 @@ Layershift is a video effects library. Each effect ships as a self-contained Web
 
 Both effects share core infrastructure (input handling, video loading, depth system, build pipeline).
 
-See `docs/diagrams/system-architecture.md` for the visual library structure and dependency graph.
+See [system architecture diagram](./diagrams/system-architecture.md) for the visual library structure and dependency graph.
 
 ## Module Map
 
-See `docs/diagrams/system-architecture.md` for the visual dependency graph.
+See [system architecture diagram](./diagrams/system-architecture.md) for the visual dependency graph.
 
 Modules are annotated as **effect-specific** or **shared** (reusable by future effects).
 
@@ -61,7 +61,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 
 ### Initialization
 
-See `docs/diagrams/parallax-initialization.md` for the full sequence diagram.
+See [parallax initialization diagram](./diagrams/parallax-initialization.md) for the full sequence diagram.
 
 1. **Asset loading** (parallel): video element + binary depth data
 2. **Depth analysis** (sync, <5ms): histogram, percentiles, bimodality scoring
@@ -73,7 +73,7 @@ See `docs/diagrams/parallax-initialization.md` for the full sequence diagram.
 
 ### Render Loop
 
-See `docs/diagrams/parallax-render-loop.md` for the dual-loop architecture and GPU shader pipeline.
+See [parallax render loop diagram](./diagrams/parallax-render-loop.md) for the dual-loop architecture and GPU shader pipeline.
 
 Two decoupled loops:
 - **RVFC** (~24-30fps): depth texture updates at video frame rate
@@ -97,7 +97,7 @@ Two decoupled loops:
 
 ### Depth-Adaptive Parameter Derivation
 
-See `docs/diagrams/depth-parameter-derivation.md` for the data flow and precedence diagrams. See `docs/parallax/` for the full specification including rules, skills, and self-audit.
+See [depth parameter derivation diagram](./diagrams/depth-parameter-derivation.md) for the data flow and precedence diagrams. See [parallax effect documentation](./parallax/depth-derivation-rules.md) for the full specification including rules, skills, and self-audit.
 
 `src/depth-analysis.ts` exports two pure functions that run once at initialization:
 - `analyzeDepthFrames()` — builds a statistical DepthProfile from sampled depth frames
@@ -113,7 +113,7 @@ See `docs/diagrams/depth-parameter-derivation.md` for the data flow and preceden
 
 ### Initialization
 
-See `docs/diagrams/portal-initialization.md` for the full sequence diagram.
+See [portal initialization diagram](./diagrams/portal-initialization.md) for the full sequence diagram.
 
 1. **Asset loading** (parallel): video element + binary depth data + SVG mesh generation
 2. **Depth interpolator**: Web Worker preferred, main-thread fallback
@@ -122,7 +122,7 @@ See `docs/diagrams/portal-initialization.md` for the full sequence diagram.
 
 ### Render Pipeline
 
-See `docs/diagrams/portal-render-pipeline.md` for the multi-pass pipeline diagram.
+See [portal render pipeline diagram](./diagrams/portal-render-pipeline.md) for the multi-pass pipeline diagram.
 
 Multi-pass stencil + FBO compositing (same dual-loop architecture as parallax):
 
@@ -218,7 +218,7 @@ Shadow DOM encapsulates a `<canvas>` (WebGL 2 with stencil) and hidden `<video>`
 | `layershift-portal:frame` | currentTime, frameNumber |
 | `layershift-portal:error` | message |
 
-See `docs/portal/portal-overview.md` for full API reference.
+See [portal overview](./portal/portal-overview.md) for full API reference.
 
 ### Framework Wrappers
 
@@ -226,7 +226,7 @@ Located in `src/components/layershift/wrappers/`. Each adapter translates framew
 
 ## Precomputed Depth System (Shared)
 
-See `docs/diagrams/depth-precompute-pipeline.md` for the generation and runtime interpolation flow.
+See [depth precompute pipeline diagram](./diagrams/depth-precompute-pipeline.md) for the generation and runtime interpolation flow.
 
 The depth system is shared infrastructure — not specific to the parallax effect. Future effects that need per-pixel depth information can reuse the same binary format, loader, and interpolator.
 
@@ -252,7 +252,7 @@ The depth system is shared infrastructure — not specific to the parallax effec
 
 ## Build System
 
-See `docs/diagrams/build-system.md` for the build flow diagram.
+See [build system diagram](./diagrams/build-system.md) for the build flow diagram.
 
 | Command | Output | Description |
 |---------|--------|-------------|
@@ -292,30 +292,31 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | `.claude/standards/invariants.md` | Project-wide inviolable constraints |
 | `.claude/agents/*.md` | Subagent definitions (7 roles with tool restrictions) |
 | `.claude/skills/*/SKILL.md` | Reusable procedural skills (`/publish-npm`, `/deploy-production`, `/run-tests`, `/create-adr`, `/audit-docs`) |
-| `docs/architecture.md` | This file — system architecture |
+| [architecture.md](./architecture.md) | This file — system architecture |
 | **Diagrams** | |
-| `docs/diagrams/system-architecture.md` | Library structure + module dependencies |
-| `docs/diagrams/parallax-initialization.md` | Parallax init sequence diagram |
-| `docs/diagrams/parallax-render-loop.md` | Dual-loop + GPU shader pipeline |
-| `docs/diagrams/depth-parameter-derivation.md` | Derivation data flow + precedence |
-| `docs/diagrams/depth-precompute-pipeline.md` | Offline generation + runtime interpolation |
-| `docs/diagrams/build-system.md` | Build targets + packaging flow |
+| [system-architecture.md](./diagrams/system-architecture.md) | Library structure + module dependencies |
+| [parallax-initialization.md](./diagrams/parallax-initialization.md) | Parallax init sequence diagram |
+| [parallax-render-loop.md](./diagrams/parallax-render-loop.md) | Dual-loop + GPU shader pipeline |
+| [depth-parameter-derivation.md](./diagrams/depth-parameter-derivation.md) | Derivation data flow + precedence |
+| [depth-precompute-pipeline.md](./diagrams/depth-precompute-pipeline.md) | Offline generation + runtime interpolation |
+| [build-system.md](./diagrams/build-system.md) | Build targets + packaging flow |
 | **Decisions** | |
-| `docs/adr/ADR-001-*.md` | Depth-derived parallax parameter tuning |
-| `docs/adr/ADR-002-*.md` | WebGL/GLSL rendering approach (superseded by ADR-004) |
-| `docs/adr/ADR-004-*.md` | Three.js to pure WebGL 2 migration |
-| `docs/adr/ADR-003-*.md` | Staging via Vercel preview deployments |
-| `docs/adr/ADR-005-*.md` | Logo Depth Portal effect design decisions |
-| `docs/adr/ADR-006-*.md` | Portal v4: emissive interior, geometric chamfer, nesting-based hole detection |
+| [ADR-001](./adr/ADR-001-depth-derived-parallax-tuning.md) | Depth-derived parallax parameter tuning |
+| [ADR-002](./adr/ADR-002-webgl-rendering-approach.md) | WebGL/GLSL rendering approach (superseded by ADR-004) |
+| [ADR-004](./adr/ADR-004-threejs-to-pure-webgl-migration.md) | Three.js to pure WebGL 2 migration |
+| [ADR-003](./adr/ADR-003-staging-preview-deployment-workflow.md) | Staging via Vercel preview deployments |
+| [ADR-005](./adr/ADR-005-logo-depth-portal-effect.md) | Logo Depth Portal effect design decisions |
+| [ADR-006](./adr/ADR-006-portal-v4-emissive-chamfer-nesting.md) | Portal v4: emissive interior, geometric chamfer, nesting-based hole detection |
+| [ADR-007](./adr/ADR-007-vitepress-documentation-wiki.md) | VitePress documentation wiki integration |
 | **Parallax Effect** | |
-| `docs/parallax/depth-derivation-rules.md` | Inviolable derivation system rules |
-| `docs/parallax/depth-analysis-skills.md` | Formal function specifications |
-| `docs/parallax/depth-derivation-architecture.md` | Depth subsystem integration details |
-| `docs/parallax/depth-derivation-testability.md` | Testing strategy and snapshot approach |
-| `docs/parallax/depth-derivation-self-audit.md` | Implementation verification audit |
+| [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
+| [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |
+| [depth-derivation-architecture.md](./parallax/depth-derivation-architecture.md) | Depth subsystem integration details |
+| [depth-derivation-testability.md](./parallax/depth-derivation-testability.md) | Testing strategy and snapshot approach |
+| [depth-derivation-self-audit.md](./parallax/depth-derivation-self-audit.md) | Implementation verification audit |
 | **Portal Effect** | |
-| `docs/portal/portal-overview.md` | Effect overview, API reference, usage guide |
-| `docs/portal/portal-v2-design.md` | Historical v2 design document (dual-scene compositing) |
-| `docs/portal/portal-v3-dimensional-typography.md` | Historical v3 design document (JFA distance field, bevel) |
-| `docs/diagrams/portal-initialization.md` | Portal init sequence diagram |
-| `docs/diagrams/portal-render-pipeline.md` | Multi-pass render pipeline diagram |
+| [portal-overview.md](./portal/portal-overview.md) | Effect overview, API reference, usage guide |
+| [portal-v2-design.md](./portal/portal-v2-design.md) | Historical v2 design document (dual-scene compositing) |
+| [portal-v3-dimensional-typography.md](./portal/portal-v3-dimensional-typography.md) | Historical v3 design document (JFA distance field, bevel) |
+| [portal-initialization.md](./diagrams/portal-initialization.md) | Portal init sequence diagram |
+| [portal-render-pipeline.md](./diagrams/portal-render-pipeline.md) | Multi-pass render pipeline diagram |

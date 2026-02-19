@@ -160,6 +160,8 @@ npm install layershift
 
 <span class="comment"># Generate depth data</span>
 npm run precompute -- your-video.mp4`,
+
+  docsLink: '/docs/parallax/depth-derivation-rules',
 };
 
 // ---------------------------------------------------------------------------
@@ -352,6 +354,8 @@ npm install layershift
 
 <span class="comment"># Generate depth data</span>
 npm run precompute -- your-video.mp4`,
+
+  docsLink: '/docs/portal/portal-overview',
 };
 
 // ---------------------------------------------------------------------------

@@ -195,7 +195,7 @@ The portal canvas renders with a transparent background. Areas outside the logo 
 </div>
 ```
 
-The effect can also be layered with other Layershift effects via CSS stacking. See `docs/compositing-possibilities.md` for multi-effect composition patterns.
+The effect can also be layered with other Layershift effects via CSS stacking. See [compositing possibilities](../compositing-possibilities.md) for multi-effect composition patterns.
 
 ## SVG Requirements
 

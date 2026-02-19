@@ -49,8 +49,16 @@ export function StickyNav() {
 
         <EffectSelector compact />
 
-        <a
-          href="https://github.com/jeremysykes/layershift"
+        <div className="flex items-center gap-3">
+          <a
+            href="/docs/"
+            className="text-xs hover:text-white transition-colors"
+            style={{ color: '#777' }}
+          >
+            Docs
+          </a>
+          <a
+            href="https://github.com/jeremysykes/layershift"
           target="_blank"
           rel="noopener"
           aria-label="GitHub"
@@ -58,7 +66,8 @@ export function StickyNav() {
           style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
         >
           <Github className="w-[18px] h-[18px]" />
-        </a>
+          </a>
+        </div>
       </div>
     </header>
   );

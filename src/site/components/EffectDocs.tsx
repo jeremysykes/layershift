@@ -93,7 +93,7 @@ export function EffectDocs({ content }: EffectDocsProps) {
             <p className="mb-4 text-base">{content.prepareVideoIntro}</p>
           )}
           <CodeBlock html={content.prepareVideoCode} />
-          <p className="mt-4">
+          <p className="mt-4 flex gap-4">
             <a
               href="https://github.com/jeremysykes/layershift"
               target="_blank"
@@ -103,6 +103,15 @@ export function EffectDocs({ content }: EffectDocsProps) {
             >
               View on GitHub &rarr;
             </a>
+            {content.docsLink && (
+              <a
+                href={content.docsLink}
+                className="hover:text-white transition-colors"
+                style={{ color: '#ccc' }}
+              >
+                Architecture deep dive &rarr;
+              </a>
+            )}
           </p>
         </div>
       )}

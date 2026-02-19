@@ -20,6 +20,13 @@ export function Footer() {
           </a>
         </span>
         <a
+          href="/docs/"
+          className="hover:text-white transition-colors"
+          style={{ color: '#777' }}
+        >
+          Docs
+        </a>
+        <a
           href="https://github.com/jeremysykes/layershift"
           target="_blank"
           rel="noopener"

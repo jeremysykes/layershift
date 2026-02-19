@@ -4,7 +4,7 @@
 
 A pure module (`src/depth-analysis.ts`) sits between the depth loader and the renderer constructor. It has no side effects, no state, and no dependencies beyond the `PrecomputedDepthData` type from `precomputed-depth.ts`. It reads depth frame data (already in memory), computes statistics, and returns parameter values. These values are merged with any explicit overrides and passed to the renderer's existing config interface.
 
-See `docs/diagrams/depth-parameter-derivation.md` for the data flow and precedence diagrams.
+See [depth parameter derivation diagram](../diagrams/depth-parameter-derivation.md) for the data flow and precedence diagrams.
 
 ## Where Analysis Lives
 
