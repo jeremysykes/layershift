@@ -577,6 +577,11 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         try { await video.play(); } catch { /* Autoplay blocked */ }
       }
 
+      // Final abort check — video.play() is the last await, and abort
+      // could fire during it (Strict Mode unmount). Don't mark as
+      // initialized if the element was disconnected mid-init.
+      if (signal.aborted) return;
+
       this.lifecycle.markInitialized();
 
       this.emit<LayershiftPortalReadyDetail>('layershift-portal:ready', {

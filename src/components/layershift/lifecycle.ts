@@ -72,11 +72,18 @@ export class LifecycleManager {
 
   // --- Public API (called from lifecycle callbacks) ---
 
-  /** Call from `connectedCallback`. Sets up Shadow DOM only — no init. */
+  /**
+   * Call from `connectedCallback`. Sets up Shadow DOM and attempts init
+   * if all required attributes are already present (e.g., after React
+   * Strict Mode remount where attributes persist on the DOM element).
+   */
   onConnected(): void {
     this.element.setupShadowDOM();
-    // Do NOT call init here. Attributes may not be set yet.
-    // Init is triggered by onAttributeChanged once all required attrs exist.
+    // Try init — if required attributes aren't set yet (first mount via
+    // React useEffect), tryInit() will exit early. If attributes DO
+    // exist (Strict Mode remount, or non-React inline usage), it will
+    // proceed immediately.
+    void this.tryInit();
   }
 
   /** Call from `disconnectedCallback`. Cancels in-flight init + disposes. */

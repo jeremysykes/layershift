@@ -468,6 +468,11 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         }
       }
 
+      // Final abort check — video.play() is the last await, and abort
+      // could fire during it (Strict Mode unmount). Don't mark as
+      // initialized if the element was disconnected mid-init.
+      if (signal.aborted) return;
+
       this.lifecycle.markInitialized();
 
       this.emit<LayershiftReadyDetail>('layershift-parallax:ready', {
