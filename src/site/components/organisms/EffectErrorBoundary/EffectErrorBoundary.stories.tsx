@@ -75,10 +75,23 @@ export const WithError: Story = {
   },
 };
 
-/** Minimal fallback — just a text message. */
+/** Minimal fallback — short message with the same visual treatment. */
 export const MinimalFallback: Story = {
   args: {
     children: <ThrowingChild />,
-    fallback: <span style={{ color: '#555', fontSize: '0.85rem' }}>Error</span>,
+    fallback: (
+      <div
+        style={{
+          padding: '2rem',
+          color: '#f44',
+          textAlign: 'center',
+          fontSize: '0.85rem',
+          border: '1px dashed #f44',
+          borderRadius: '8px',
+        }}
+      >
+        Error
+      </div>
+    ),
   },
 };

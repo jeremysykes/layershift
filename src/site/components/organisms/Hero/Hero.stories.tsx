@@ -14,6 +14,11 @@ import { Hero } from './Hero';
  * **Hooks:** Uses `useHeroScroll` for scroll-driven parallax on the
  * wordmark, CTA, and scroll hint elements.
  *
+ * **Storybook note:** The hero uses `position: fixed` on all elements.
+ * The decorator applies `transform: scale(1)` which creates a new
+ * containing block, causing fixed-position children to be contained
+ * within the decorator rather than escaping to the viewport.
+ *
  * **WebGL note:** The hero renders a Layershift Web Component at full
  * viewport size. Since the custom elements are not registered in
  * Storybook, the canvas will show the skeleton/error fallback. The
@@ -23,7 +28,25 @@ const meta = {
   title: 'Organisms/Hero',
   component: Hero,
   tags: ['autodocs'],
-  decorators: [withStore],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div
+        style={{
+          position: 'relative',
+          height: '600px',
+          overflow: 'hidden',
+          background: '#0a0a0a',
+          borderRadius: '8px',
+          // transform creates a new containing block, causing
+          // position: fixed children to be contained within this element
+          transform: 'scale(1)',
+        }}
+      >
+        <Story />
+      </div>
+    ),
+    withStore,
+  ],
   parameters: {
     layout: 'fullscreen',
     store: {

@@ -17,12 +17,10 @@ const mockVideo: VideoEntry = {
  * IntersectionObserver, skeleton loading state, and a fullscreen trigger
  * button.
  *
- * **WebGL note:** This component renders a Layershift Web Component
- * (`<layershift-parallax>` or `<layershift-portal>`) inside an
- * `EffectErrorBoundary`. Since the custom elements are not registered
- * in Storybook, the demo will display the error fallback or skeleton
- * state. The container layout, aspect ratio, and fullscreen button
- * are still visible.
+ * **WebGL note:** The canvas area shows a skeleton/loading state since
+ * custom elements are not registered in Storybook. The container layout,
+ * aspect ratio, and fullscreen button are visible. See the live site for
+ * the rendered effect.
  */
 const meta = {
   title: 'Organisms/InlineDemo',
@@ -45,7 +43,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default with video and fullscreen callback. */
+/** Default with video and fullscreen callback. Shows skeleton loading state. */
 export const Default: Story = {};
 
 /** Without a video — uses only the demoAttrs as source. */

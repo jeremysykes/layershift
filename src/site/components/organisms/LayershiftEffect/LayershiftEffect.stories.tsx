@@ -12,11 +12,7 @@ import { LayershiftEffect } from './LayershiftEffect';
  * **WebGL note:** The custom elements require WebGL and registered
  * custom element definitions that are not available in Storybook.
  * These stories demonstrate the component's prop API; the actual
- * canvas will not render.
- *
- * **Ready event:** The component listens for the custom element's
- * ready event (`layershift-parallax:ready` / `layershift-portal:ready`)
- * and calls the `onReady` callback once.
+ * canvas will not render. See the live site for the visual result.
  */
 const meta = {
   title: 'Organisms/LayershiftEffect',
@@ -34,6 +30,36 @@ const meta = {
     },
     onReady: fn(),
   },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div>
+        <div
+          style={{
+            background: '#141414',
+            border: '1px solid #222',
+            borderRadius: '8px',
+            padding: '2rem',
+            minHeight: '200px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.75rem',
+          }}
+        >
+          <span style={{ fontSize: '1.5rem' }}>🖥</span>
+          <span style={{ color: '#666', fontSize: '0.8rem', textAlign: 'center' }}>
+            WebGL canvas — requires custom element registration.
+            <br />
+            See <strong style={{ color: '#888' }}>layershift.io</strong> for the live effect.
+          </span>
+          <div style={{ width: '100%', maxWidth: '400px' }}>
+            <Story />
+          </div>
+        </div>
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof LayershiftEffect>;
 
 export default meta;

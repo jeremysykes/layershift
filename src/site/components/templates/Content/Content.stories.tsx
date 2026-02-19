@@ -5,10 +5,11 @@ import { Content } from './Content';
 /**
  * Main content area that composes all below-the-fold sections:
  * IntroSection, InstallSection, EffectSection (in a RevealSection),
- * ComingSoonSection, and Footer.
+ * ComingSoonSection, RecentlyShippedSection, and Footer.
  *
  * Positioned at `margin-top: 100vh` in production to sit below the
- * fixed hero.
+ * fixed hero. A decorator overrides this to `0` so content is
+ * immediately visible in Storybook.
  *
  * **Store dependencies:** IntroSection, EffectSection, and their
  * children read from the Zustand store for effect state and videos.
@@ -22,7 +23,20 @@ const meta = {
   title: 'Templates/Content',
   component: Content,
   tags: ['autodocs'],
-  decorators: [withStore],
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div>
+        {/*
+         * Override the 100vh top margin that exists for the fixed hero.
+         * Tailwind v4 puts utilities in @layer, so a non-layered rule
+         * naturally takes precedence without needing !important.
+         */}
+        <style>{`.content { margin-top: 0; }`}</style>
+        <Story />
+      </div>
+    ),
+    withStore,
+  ],
   parameters: {
     layout: 'fullscreen',
     store: {
@@ -39,7 +53,6 @@ const meta = {
             depthSrc: '/videos/fashion-rain-depth.mp4',
             depthMeta: '/videos/fashion-rain.bin',
             label: 'Fashion Rain',
-            thumb: '/thumbs/fashion-rain.jpg',
           },
         ],
         textural: [],

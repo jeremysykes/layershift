@@ -3,6 +3,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { EffectSelector } from './EffectSelector';
 import { withStore } from '../../../../../.storybook/decorators/withStore';
 
+/**
+ * Effect selector nav — tab bar that switches between enabled effects.
+ * Returns `null` when only one effect is enabled (nothing to switch
+ * between), so all stories use two or more effects.
+ */
 const meta = {
   title: 'Molecules/EffectSelector',
   component: EffectSelector,
@@ -16,6 +21,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Full-size tab bar with two effect tabs. */
 export const Default: Story = {
   parameters: {
     store: {
@@ -28,6 +34,7 @@ export const Default: Story = {
   },
 };
 
+/** Compact variant used inside the StickyNav — smaller text, no border. */
 export const Compact: Story = {
   args: {
     compact: true,
@@ -43,12 +50,15 @@ export const Compact: Story = {
   },
 };
 
-export const SingleEffect: Story = {
+/** Three effects — demonstrates how the tab bar scales. */
+export const ThreeEffects: Story = {
   parameters: {
     store: {
-      activeEffect: 'parallax',
+      activeEffect: 'portal',
       effects: [
         { id: 'parallax', label: 'Depth Parallax', enabled: true },
+        { id: 'portal', label: 'Portal', enabled: true },
+        { id: 'morph', label: 'Morph', enabled: true },
       ],
     },
   },

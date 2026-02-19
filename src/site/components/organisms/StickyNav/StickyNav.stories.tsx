@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { withStore } from '../../../../../.storybook/decorators/withStore';
 import { StickyNav } from './StickyNav';
@@ -6,13 +7,12 @@ import { StickyNav } from './StickyNav';
  * Sticky navigation header that slides in after scrolling past the hero section.
  *
  * Contains: wordmark (scroll-to-top link), compact EffectSelector, Docs link,
- * and GitHub icon.
+ * Components link, and GitHub icon.
  *
  * **Visibility behavior:** In production the nav is hidden (`translateY(-100%)`)
- * until `window.scrollY > window.innerHeight`. In these stories the component
- * renders with that scroll-dependent visibility, so the "ForceVisible" story
- * uses a wrapper to override the transform and make the nav always visible for
- * inspection.
+ * until `window.scrollY > window.innerHeight`. The Default story simulates
+ * a scrolled state so the component's scroll listener triggers visibility
+ * naturally.
  */
 const meta = {
   title: 'Organisms/StickyNav',
@@ -35,26 +35,53 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * Default rendering. The nav is hidden until the user scrolls past
- * `window.innerHeight`. In this isolated story the scroll threshold
- * is not met, so the bar remains off-screen.
+ * Decorator that simulates a scrolled-past-hero state. Temporarily
+ * overrides `window.scrollY` to exceed `window.innerHeight`, then
+ * fires a scroll event so the component's listener triggers visibility.
  */
-export const Default: Story = {};
+function withSimulatedScroll(Story: React.ComponentType) {
+  useEffect(() => {
+    const original = Object.getOwnPropertyDescriptor(window, 'scrollY');
+    Object.defineProperty(window, 'scrollY', {
+      value: window.innerHeight + 100,
+      configurable: true,
+    });
+    window.dispatchEvent(new Event('scroll'));
+
+    return () => {
+      if (original) {
+        Object.defineProperty(window, 'scrollY', original);
+      } else {
+        delete (window as Record<string, unknown>).scrollY;
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      style={{
+        paddingTop: '56px',
+        // transform creates a new containing block, causing the
+        // position: fixed header to be contained within this element
+        transform: 'scale(1)',
+      }}
+    >
+      <Story />
+    </div>
+  );
+}
 
 /**
- * Forces the sticky nav to be visible by overriding the inline
- * `transform` via a wrapping div. This lets you inspect the layout,
- * effect selector, and links without needing to scroll.
+ * Nav visible after simulating a scroll past the hero. The scroll
+ * listener sets `visible = true`, which removes `translateY(-100%)`.
  */
-export const ForceVisible: Story = {
-  decorators: [
-    (Story) => (
-      <div style={{ paddingTop: '56px' }}>
-        <style>{`
-          header { transform: translateY(0) !important; }
-        `}</style>
-        <Story />
-      </div>
-    ),
-  ],
+export const Default: Story = {
+  decorators: [withSimulatedScroll],
 };
+
+/**
+ * Hidden state — demonstrates the scroll-dependent visibility behavior.
+ * The nav is off-screen via `translateY(-100%)` since the scroll
+ * threshold is not met in an isolated story.
+ */
+export const Hidden: Story = {};
