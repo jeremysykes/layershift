@@ -578,7 +578,8 @@ export class LayershiftPortalElement extends HTMLElement {
         video,
         readDepth,
         () => {
-          const raw = this.inputHandler!.update();
+          if (!this.inputHandler) return { x: 0, y: 0 };
+          const raw = this.inputHandler.update();
           return { x: raw.x * pxFactor, y: raw.y * pyFactor };
         },
         (currentTime: number, frameNumber: number) => {

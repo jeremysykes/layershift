@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useSiteStore } from './store';
 import { Hero } from './components/Hero';
 import { StickyNav } from './components/StickyNav';
+import { BackToTop } from './components/BackToTop';
 import { Content } from './components/Content';
 import type { EffectsManifest, VideoEntry, VideoManifest } from './types';
 
@@ -66,12 +67,26 @@ export function App() {
     init();
   }, [initialize]);
 
+  // Scroll to hash target after initialization
+  useEffect(() => {
+    if (!isInitialized) return;
+    const hash = window.location.hash;
+    if (!hash) return;
+
+    // Defer to next frame so DOM is fully rendered
+    requestAnimationFrame(() => {
+      const target = document.querySelector(hash);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, [isInitialized]);
+
   if (!isInitialized) return null;
 
   return (
     <>
       <Hero />
       <StickyNav />
+      <BackToTop />
       <Content />
     </>
   );
