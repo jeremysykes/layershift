@@ -3,7 +3,7 @@ import { RevealSection } from '../../templates/RevealSection';
 
 export function ComingSoonSection() {
   return (
-    <RevealSection>
+    <RevealSection padding="py-10 sm:py-12">
       <div className="max-w-[720px] mx-auto">
         <h2 className="text-[1.75rem] font-semibold mb-4" style={{ color: '#555' }}>
           More effects coming soon
