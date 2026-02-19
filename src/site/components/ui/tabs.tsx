@@ -56,8 +56,8 @@ const TabsList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
     <div
       ref={ref}
       role="tablist"
-      className={cn('flex gap-0', className)}
-      style={{ borderBottom: '1px solid #222' }}
+      className={cn('flex gap-0 overflow-x-auto', className)}
+      style={{ borderBottom: '1px solid #222', WebkitOverflowScrolling: 'touch' }}
       {...props}
     />
   ),
@@ -83,7 +83,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
         role="tab"
         type="button"
         aria-selected={isActive}
-        className={cn('relative px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors', isActive && 'active', className)}
+        className={cn('relative shrink-0 px-4 py-3 text-sm font-medium cursor-pointer transition-colors', isActive && 'active', className)}
         style={{
           background: 'none',
           border: 'none',

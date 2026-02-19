@@ -15,7 +15,7 @@ export function ComingSoonSection() {
           href="https://github.com/jeremysykes/layershift"
           target="_blank"
           rel="noopener"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-[0.9rem] transition-colors hover:text-white"
+          className="inline-flex items-center gap-2 px-4 py-3 rounded-md text-[0.9rem] transition-colors hover:text-white"
           style={{ border: '1px solid #333', color: '#ccc' }}
         >
           <Github className="w-[18px] h-[18px]" />

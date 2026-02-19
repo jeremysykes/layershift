@@ -30,7 +30,7 @@ export function ConfigTable({ attributes }: ConfigTableProps) {
 
   return (
     <div className="config-table my-6">
-      <div className="flex items-center justify-between gap-4 mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h3 className="text-[1.1rem] font-semibold" style={{ color: '#fff' }}>
           Configuration
         </h3>
@@ -47,12 +47,13 @@ export function ConfigTable({ attributes }: ConfigTableProps) {
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter attributes…"
               aria-label="Filter configuration attributes"
-              className="pl-8 pr-3 py-1.5 rounded-md text-[0.8rem] outline-none transition-colors"
+              className="pl-8 pr-3 py-2 rounded-md text-[0.8rem] outline-none transition-colors"
               style={{
                 background: '#1a1a1a',
                 border: '1px solid #333',
                 color: '#ccc',
                 width: '180px',
+                minHeight: '44px',
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = '#555';

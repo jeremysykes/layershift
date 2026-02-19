@@ -24,8 +24,8 @@ export function Footer() {
           target="_blank"
           rel="noopener"
           aria-label="GitHub"
-          className="hover:text-white transition-colors"
-          style={{ color: '#777' }}
+          className="inline-flex items-center justify-center hover:text-white transition-colors"
+          style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
         >
           <Github className="w-[18px] h-[18px]" />
         </a>
