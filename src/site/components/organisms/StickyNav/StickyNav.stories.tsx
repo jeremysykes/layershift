@@ -52,7 +52,7 @@ function withSimulatedScroll(Story: React.ComponentType) {
       if (original) {
         Object.defineProperty(window, 'scrollY', original);
       } else {
-        delete (window as Record<string, unknown>).scrollY;
+        delete (window as unknown as Record<string, unknown>).scrollY;
       }
     };
   }, []);
