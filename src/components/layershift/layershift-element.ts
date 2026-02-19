@@ -374,8 +374,8 @@ export class LayershiftElement extends HTMLElement {
         loadPrecomputedDepth(depthSrc, depthMeta),
       ]);
 
-      // Check if disconnected during loading
-      if (this.abortController.signal.aborted) {
+      // Check if disconnected during loading (abortController is nulled by dispose)
+      if (!this.abortController || this.abortController.signal.aborted) {
         video.remove();
         return;
       }
@@ -425,7 +425,7 @@ export class LayershiftElement extends HTMLElement {
       }
 
       // Check if disconnected during worker init
-      if (this.abortController.signal.aborted) {
+      if (!this.abortController || this.abortController.signal.aborted) {
         video.remove();
         this.depthWorker?.dispose();
         this.depthWorker = null;
@@ -458,7 +458,8 @@ export class LayershiftElement extends HTMLElement {
         video,
         readDepth,
         () => {
-          const raw = this.inputHandler!.update();
+          if (!this.inputHandler) return { x: 0, y: 0 };
+          const raw = this.inputHandler.update();
           return {
             x: raw.x * pxFactor,
             y: raw.y * pyFactor,

@@ -18,6 +18,10 @@ export interface VideoEntry {
   src: string;
   depthSrc: string;
   depthMeta: string;
+  /** Display label for the video selector (e.g. "Fashion Rain") */
+  label?: string;
+  /** Thumbnail image URL (160×90 JPEG) */
+  thumb?: string;
 }
 
 /** Categorized video manifest: parallax videos for scene effects, textural for portal. */
