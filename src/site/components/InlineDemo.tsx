@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { LayershiftEffect } from './LayershiftEffect';
+import { EffectErrorBoundary } from './EffectErrorBoundary';
 import type { VideoEntry } from '../types';
 
 interface InlineDemoProps {
@@ -52,7 +54,21 @@ export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
       className="w-full max-w-[640px] aspect-video mx-auto my-8 rounded-xl overflow-hidden"
       style={{ border: '1px solid #222', background: '#000' }}
     >
-      {visible && <LayershiftEffect tagName={tagName} attrs={attrs} />}
+      {visible && (
+        <EffectErrorBoundary
+          fallback={
+            <div
+              className="flex flex-col items-center justify-center gap-2"
+              style={{ width: '100%', height: '100%', color: '#555' }}
+            >
+              <AlertTriangle size={20} />
+              <span className="text-[0.8rem]">Could not load effect demo</span>
+            </div>
+          }
+        >
+          <LayershiftEffect tagName={tagName} attrs={attrs} />
+        </EffectErrorBoundary>
+      )}
     </div>
   );
 }
