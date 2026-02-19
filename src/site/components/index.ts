@@ -31,6 +31,7 @@ export { Hero } from './organisms/Hero';
 export { InstallSection } from './organisms/InstallSection';
 export { IntroSection } from './organisms/IntroSection';
 export { ComingSoonSection } from './organisms/ComingSoonSection';
+export { RecentlyShippedSection } from './organisms/RecentlyShippedSection';
 
 // Templates
 export { Content } from './templates/Content';
