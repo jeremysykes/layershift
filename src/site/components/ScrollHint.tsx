@@ -1,15 +1,10 @@
-import { useEffect, useState, forwardRef } from 'react';
+import { useState, forwardRef } from 'react';
 
 /**
  * Fixed-position scroll hint with animated chevron. Appears after a delay.
  */
 export const ScrollHint = forwardRef<HTMLDivElement>(function ScrollHint(_, ref) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), 3000);
-    return () => clearTimeout(timer);
-  }, []);
+  const [visible, setVisible] = useState(true);
 
   return (
     <div

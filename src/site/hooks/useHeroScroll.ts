@@ -8,6 +8,7 @@ export function useHeroScroll(
   heroRef: React.RefObject<HTMLDivElement | null>,
   wordmarkRef: React.RefObject<HTMLDivElement | null>,
   scrollHintRef: React.RefObject<HTMLDivElement | null>,
+  ctaRef?: React.RefObject<HTMLDivElement | null>,
 ) {
   const ticking = useRef(false);
 
@@ -30,11 +31,14 @@ export function useHeroScroll(
         hero.style.opacity = String(opacity);
         hero.style.transform = `scale(${scale})`;
 
-        // Fade wordmark and scroll hint with the hero
+        // Fade wordmark, CTA, and scroll hint with the hero
         const wordmark = wordmarkRef.current;
+        const cta = ctaRef?.current;
         const scrollHint = scrollHintRef.current;
-        if (wordmark) wordmark.style.opacity = String(Math.max(1 - progress * 2, 0));
-        if (scrollHint) scrollHint.style.opacity = String(Math.max(1 - progress * 2, 0));
+        const overlayOpacity = String(Math.max(1 - progress * 2, 0));
+        if (wordmark) wordmark.style.opacity = overlayOpacity;
+        if (cta) cta.style.opacity = overlayOpacity;
+        if (scrollHint) scrollHint.style.opacity = overlayOpacity;
 
         ticking.current = false;
       });
@@ -42,5 +46,5 @@ export function useHeroScroll(
 
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [heroRef, wordmarkRef, scrollHintRef]);
+  }, [heroRef, wordmarkRef, scrollHintRef, ctaRef]);
 }
