@@ -40,7 +40,7 @@ export function RecentlyShippedSection() {
   const hasMore = CHANGELOG_ENTRIES.length > VISIBLE_COUNT;
 
   return (
-    <RevealSection>
+    <RevealSection padding="py-10 sm:py-12">
       <div className="max-w-[720px] mx-auto">
         <h2 className="text-[1.75rem] font-semibold mb-1" style={{ color: '#fff' }}>
           Recently Shipped

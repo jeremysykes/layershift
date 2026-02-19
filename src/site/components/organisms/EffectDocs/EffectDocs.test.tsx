@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { EffectDocs } from './EffectDocs';
 import type { EffectContent } from '../../../types';
+import { DOCS_URL } from '../../../lib/nav';
 
 const baseContent: EffectContent = {
   id: 'test-effect',
@@ -61,11 +62,11 @@ describe('EffectDocs', () => {
     const content: EffectContent = {
       ...baseContent,
       prepareVideoCode: '<span class="comment"># Install</span>\nnpm install layershift',
-      docsLink: '/docs/test/overview',
+      docsLink: 'test/overview',
     };
     render(<EffectDocs content={content} />);
     const deepDiveLink = screen.getByText(/architecture deep dive/i);
     expect(deepDiveLink).toBeInTheDocument();
-    expect(deepDiveLink).toHaveAttribute('href', '/docs/test/overview');
+    expect(deepDiveLink).toHaveAttribute('href', `${DOCS_URL}test/overview`);
   });
 });

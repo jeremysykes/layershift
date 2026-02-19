@@ -20,6 +20,11 @@ Source of truth: `docs/parallax/depth-derivation-rules.md`
 2. **Diagrams are authoritative.** When a Mermaid diagram and prose conflict, update the prose to match the diagram (or update both via ADR).
 3. **Stale documentation is a bug.** Fix it immediately.
 
+## CSS Invariants
+
+1. **Never use `!important`.** Not in stylesheets, not in Tailwind's `!` modifier, not in inline overrides. If a style needs to be overridden, fix the root cause — add a prop, restructure the cascade, or refactor the component. `!important` is a hack that masks architectural problems.
+2. **Fix root causes, not symptoms.** When a component's styles don't compose well, refactor the component's API (add a prop, accept a className slot, etc.) rather than forcing overrides from the outside.
+
 ## Architecture Invariants
 
 1. **Each effect is a self-contained Web Component.** Effects ship as `<layershift-*>` custom elements.
