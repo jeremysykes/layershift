@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { LayershiftEffect } from './LayershiftEffect';
 import { EffectErrorBoundary } from './EffectErrorBoundary';
+import { Skeleton } from './ui/skeleton';
 import type { VideoEntry } from '../types';
 
 interface InlineDemoProps {
@@ -19,6 +21,7 @@ interface InlineDemoProps {
 export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -48,10 +51,12 @@ export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
     };
   }, [demoAttrs, video]);
 
+  const handleReady = useCallback(() => setReady(true), []);
+
   return (
     <div
       ref={containerRef}
-      className="w-full max-w-[640px] aspect-video mx-auto my-8 rounded-xl overflow-hidden"
+      className="relative w-full max-w-[640px] aspect-video mx-auto my-8 rounded-xl overflow-hidden"
       style={{ border: '1px solid #222', background: '#000' }}
     >
       {visible && (
@@ -67,9 +72,16 @@ export function InlineDemo({ tagName, demoAttrs, video }: InlineDemoProps) {
             </div>
           }
         >
-          <LayershiftEffect tagName={tagName} attrs={attrs} />
+          <LayershiftEffect tagName={tagName} attrs={attrs} onReady={handleReady} />
         </EffectErrorBoundary>
       )}
+      <Skeleton
+        aria-hidden
+        className={cn(
+          'skeleton-shimmer absolute inset-0 z-[1] rounded-none',
+          ready && 'skeleton-fade-out',
+        )}
+      />
     </div>
   );
 }

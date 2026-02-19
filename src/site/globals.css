@@ -117,6 +117,32 @@ layershift-portal:not(:defined) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Loading skeleton shimmer                                            */
+/* ------------------------------------------------------------------ */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #111 25%,
+    #1a1a1a 37%,
+    #111 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.skeleton-fade-out {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
 /* Syntax highlighting — One Dark theme                                */
 /* ------------------------------------------------------------------ */
 
