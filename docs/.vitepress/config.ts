@@ -10,6 +10,10 @@ export default withMermaid(
     srcDir: '.',
     srcExclude: ['.vitepress/**'],
 
+    head: [
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/docs/favicon.svg' }],
+    ],
+
     appearance: 'dark',
 
     markdown: {
@@ -21,7 +25,7 @@ export default withMermaid(
       logo: '/favicon.svg',
 
       nav: [
-        { text: 'Home', link: '/' },
+        { text: 'Home', link: 'https://layershift.io', target: '_self' },
       ],
 
       sidebar: [
