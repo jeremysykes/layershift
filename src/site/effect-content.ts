@@ -55,10 +55,10 @@ const parallaxContent: EffectContent = {
     },
     {
       framework: 'React',
-      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
+      code: `<span class="keyword">import</span> <span class="string">'layershift'</span>
 
-<span class="tag">export default function</span> Hero() {
-  <span class="tag">return</span> (
+<span class="keyword">export default function</span> Hero() {
+  <span class="keyword">return</span> (
     <span class="tag">&lt;layershift-parallax</span>
       <span class="attr">src</span>=<span class="string">"video.mp4"</span>
       <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
@@ -78,13 +78,13 @@ const parallaxContent: EffectContent = {
 <span class="tag">&lt;/template&gt;</span>
 
 <span class="tag">&lt;script setup&gt;</span>
-<span class="tag">import</span> <span class="string">'layershift'</span>
+<span class="keyword">import</span> <span class="string">'layershift'</span>
 <span class="tag">&lt;/script&gt;</span>`,
     },
     {
       framework: 'Svelte',
       code: `<span class="tag">&lt;script&gt;</span>
-  <span class="tag">import</span> <span class="string">'layershift'</span>
+  <span class="keyword">import</span> <span class="string">'layershift'</span>
 <span class="tag">&lt;/script&gt;</span>
 
 <span class="tag">&lt;layershift-parallax</span>
@@ -95,8 +95,8 @@ const parallaxContent: EffectContent = {
     },
     {
       framework: 'Angular',
-      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
-<span class="tag">import</span> { CUSTOM_ELEMENTS_SCHEMA } <span class="tag">from</span> <span class="string">'@angular/core'</span>
+      code: `<span class="keyword">import</span> <span class="string">'layershift'</span>
+<span class="keyword">import</span> { CUSTOM_ELEMENTS_SCHEMA } <span class="keyword">from</span> <span class="string">'@angular/core'</span>
 
 @Component({
   <span class="attr">schemas</span>: [CUSTOM_ELEMENTS_SCHEMA],
@@ -108,7 +108,7 @@ const parallaxContent: EffectContent = {
     /&gt;
   \`</span>
 })
-<span class="tag">export class</span> HeroComponent {}`,
+<span class="keyword">export class</span> HeroComponent {}`,
     },
   ],
 
@@ -134,7 +134,7 @@ const parallaxContent: EffectContent = {
     { event: 'layershift-parallax:error', detail: 'message', when: 'Initialization error' },
   ],
 
-  eventListenerExample: `<span class="tag">const</span> el = document.querySelector(<span class="string">'layershift-parallax'</span>);
+  eventListenerExample: `<span class="keyword">const</span> el = document.querySelector(<span class="string">'layershift-parallax'</span>);
 
 el.addEventListener(<span class="string">'layershift-parallax:ready'</span>, (e) =&gt; {
   console.log(<span class="string">\`Video: \${e.detail.videoWidth}x\${e.detail.videoHeight}\`</span>);
@@ -255,10 +255,10 @@ const portalContent: EffectContent = {
     },
     {
       framework: 'React',
-      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
+      code: `<span class="keyword">import</span> <span class="string">'layershift'</span>
 
-<span class="tag">export default function</span> Hero() {
-  <span class="tag">return</span> (
+<span class="keyword">export default function</span> Hero() {
+  <span class="keyword">return</span> (
     <span class="tag">&lt;layershift-portal</span>
       <span class="attr">src</span>=<span class="string">"video.mp4"</span>
       <span class="attr">depth-src</span>=<span class="string">"depth-data.bin"</span>
@@ -280,13 +280,13 @@ const portalContent: EffectContent = {
 <span class="tag">&lt;/template&gt;</span>
 
 <span class="tag">&lt;script setup&gt;</span>
-<span class="tag">import</span> <span class="string">'layershift'</span>
+<span class="keyword">import</span> <span class="string">'layershift'</span>
 <span class="tag">&lt;/script&gt;</span>`,
     },
     {
       framework: 'Svelte',
       code: `<span class="tag">&lt;script&gt;</span>
-  <span class="tag">import</span> <span class="string">'layershift'</span>
+  <span class="keyword">import</span> <span class="string">'layershift'</span>
 <span class="tag">&lt;/script&gt;</span>
 
 <span class="tag">&lt;layershift-portal</span>
@@ -298,8 +298,8 @@ const portalContent: EffectContent = {
     },
     {
       framework: 'Angular',
-      code: `<span class="tag">import</span> <span class="string">'layershift'</span>
-<span class="tag">import</span> { CUSTOM_ELEMENTS_SCHEMA } <span class="tag">from</span> <span class="string">'@angular/core'</span>
+      code: `<span class="keyword">import</span> <span class="string">'layershift'</span>
+<span class="keyword">import</span> { CUSTOM_ELEMENTS_SCHEMA } <span class="keyword">from</span> <span class="string">'@angular/core'</span>
 
 @Component({
   <span class="attr">schemas</span>: [CUSTOM_ELEMENTS_SCHEMA],
@@ -312,7 +312,7 @@ const portalContent: EffectContent = {
     /&gt;
   \`</span>
 })
-<span class="tag">export class</span> HeroComponent {}`,
+<span class="keyword">export class</span> HeroComponent {}`,
     },
   ],
 

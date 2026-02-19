@@ -117,13 +117,14 @@ layershift-portal:not(:defined) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Syntax highlighting for code blocks (HTML-colorized spans)          */
+/* Syntax highlighting — One Dark theme                                */
 /* ------------------------------------------------------------------ */
 
-.code-highlight .comment { color: #555; }
-.code-highlight .tag { color: #7ec8e3; }
-.code-highlight .attr { color: #c9a0dc; }
-.code-highlight .string { color: #a8d8a8; }
+.code-highlight .comment { color: #5c6370; font-style: italic; }
+.code-highlight .tag     { color: #e06c75; }
+.code-highlight .keyword { color: #c678dd; }
+.code-highlight .attr    { color: #d19a66; }
+.code-highlight .string  { color: #98c379; }
 
 /* ------------------------------------------------------------------ */
 /* Responsive                                                         */
