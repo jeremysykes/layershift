@@ -17,9 +17,9 @@ export function Content() {
         <EffectSection />
       </RevealSection>
 
-      <ComingSoonSection />
-
       <RecentlyShippedSection />
+
+      <ComingSoonSection />
 
       <Footer />
     </div>
