@@ -4,10 +4,6 @@
   "framework": "vite",
   "headers": [
     {
-      "source": "/docs/(.*)",
-      "headers": []
-    },
-    {
       "source": "/(.*)",
       "headers": [
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
