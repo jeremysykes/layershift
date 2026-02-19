@@ -52,12 +52,12 @@ Tabs.displayName = 'Tabs';
 /* ------------------------------------------------------------------ */
 
 const TabsList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+  ({ className, style, ...props }, ref) => (
     <div
       ref={ref}
       role="tablist"
       className={cn('flex gap-0 overflow-x-auto', className)}
-      style={{ borderBottom: '1px solid #222', WebkitOverflowScrolling: 'touch' }}
+      style={{ borderBottom: '1px solid #222', WebkitOverflowScrolling: 'touch', ...style }}
       {...props}
     />
   ),
