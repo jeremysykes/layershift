@@ -67,6 +67,12 @@ When adding a new effect to the library:
 src/
   components/layershift/    Web Components + framework wrappers
   site/                     Landing page
+    components/             React UI (atomic design)
+      atoms/                Smallest building blocks (Button, CodeBlock, etc.)
+      molecules/            Composed from atoms (Tabs, EffectSelector, etc.)
+      organisms/            Complex sections (Hero, StickyNav, Footer, etc.)
+      templates/            Page-level wrappers (Content, RevealSection)
+      index.ts              Root barrel re-exporting all components
   parallax-renderer.ts      Parallax effect GPU pipeline
   depth-analysis.ts         Parallax depth-adaptive parameter derivation
   depth-worker.ts           Worker for bilateral filter
@@ -84,6 +90,7 @@ docs/
 scripts/
   precompute-depth.ts       Depth map generation from video
   package-output.ts         Bundle packaging
+.storybook/                 Storybook config (main, preview, manager, decorators)
 ```
 
 ## Build Commands
@@ -91,6 +98,8 @@ scripts/
 - `npm run dev` — Dev server
 - `npm run build` — Build landing page
 - `npm run build:component` — Build Web Component IIFE bundle
+- `npm run build:storybook` — Build Storybook static site
+- `npm run storybook` — Storybook dev server
 - `npm run test` — Unit tests (Vitest)
 - `npm run test:e2e` — E2E tests (Playwright)
 

@@ -1,5 +1,7 @@
 # Layershift
 
+[![Storybook](https://img.shields.io/badge/storybook-components-ff4785?logo=storybook&logoColor=white)](https://layershift.io/storybook/)
+
 Embeddable video effects as Web Components. One script tag, one custom element — works in plain HTML, React, Vue, Svelte, Angular, WordPress, and anywhere else.
 
 Layershift is a growing collection of visual effects that turn flat video into something interactive. Each effect ships as its own custom element under the `layershift-*` namespace.
@@ -109,6 +111,18 @@ npm run build:component
 # Build the npm package (ESM + IIFE + types)
 npm run build:package
 ```
+
+## Component Library
+
+Browse all site UI components with interactive controls and documentation.
+
+**[View Component Library →](https://layershift.io/storybook/)**
+
+```bash
+npm run storybook
+```
+
+Components follow atomic design (Atoms → Molecules → Organisms → Templates). Each component includes a story with controls and a colocated test.
 
 ---
 

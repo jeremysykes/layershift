@@ -1,0 +1,1 @@
+export { ConfigTable } from './ConfigTable';

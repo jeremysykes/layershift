@@ -1,0 +1,1 @@
+export { HeroCta } from './HeroCta';

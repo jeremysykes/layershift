@@ -1,0 +1,1 @@
+export { EffectSection } from './EffectSection';

@@ -26,6 +26,7 @@ export default withMermaid(
 
       nav: [
         { text: 'Home', link: 'https://layershift.io', target: '_self' },
+        { text: 'Components', link: 'https://layershift.io/storybook/', target: '_self' },
       ],
 
       sidebar: [
@@ -77,6 +78,7 @@ export default withMermaid(
             { text: 'ADR-005: Portal Effect', link: '/adr/ADR-005-logo-depth-portal-effect' },
             { text: 'ADR-006: Portal v4', link: '/adr/ADR-006-portal-v4-emissive-chamfer-nesting' },
             { text: 'ADR-007: VitePress Wiki', link: '/adr/ADR-007-vitepress-documentation-wiki' },
+            { text: 'ADR-008: Storybook Components', link: '/adr/ADR-008-storybook-atomic-design-components' },
           ],
         },
       ],
@@ -96,6 +98,12 @@ export default withMermaid(
 
     mermaidPlugin: {
       class: 'mermaid',
+    },
+
+    vite: {
+      server: {
+        port: 5174,
+      },
     },
   })
 )
