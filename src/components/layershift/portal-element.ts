@@ -233,6 +233,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     return [
       'src', 'depth-src', 'depth-meta', 'logo-src',
       'parallax-x', 'parallax-y', 'parallax-max', 'overscan', 'pom-steps',
+      'quality',
       'rim-intensity', 'rim-color', 'rim-width',
       'refraction-strength', 'chromatic-strength', 'occlusion-intensity',
       'depth-power', 'depth-scale', 'depth-bias',
@@ -303,6 +304,11 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
   private get parallaxMax(): number { return this.getAttrFloat('parallax-max', DEFAULTS.parallaxMax); }
   private get overscan(): number { return this.getAttrFloat('overscan', DEFAULTS.overscan); }
   private get pomSteps(): number { return this.getAttrFloat('pom-steps', DEFAULTS.pomSteps); }
+  private get quality(): 'auto' | 'high' | 'medium' | 'low' | undefined {
+    const val = this.getAttribute('quality');
+    if (val === 'auto' || val === 'high' || val === 'medium' || val === 'low') return val;
+    return undefined;
+  }
   // Boundary
   private get rimIntensity(): number { return this.getAttrFloat('rim-intensity', DEFAULTS.rimIntensity); }
   private get rimWidth(): number { return this.getAttrFloat('rim-width', DEFAULTS.rimWidth); }
@@ -475,6 +481,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         parallaxStrength,
         overscanPadding: this.overscan,
         pomSteps: this.pomSteps,
+        quality: this.quality,
         // Boundary
         rimLightIntensity: this.rimIntensity,
         rimLightColor: this.rimColor,

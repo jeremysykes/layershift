@@ -41,6 +41,8 @@ import {
 } from './webgl-utils';
 import type { RenderPass, FBOPass, TextureSlot } from './render-pass';
 import { TextureRegistry } from './render-pass';
+import type { QualityTier, QualityParams } from './quality';
+import { resolveQuality } from './quality';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders (GLSL 300 es for WebGL 2)
@@ -109,22 +111,25 @@ const BILATERAL_VERTEX_SHADER = /* glsl */ `#version 300 es
 const BILATERAL_FRAGMENT_SHADER = /* glsl */ `#version 300 es
   precision highp float;
 
+  // BILATERAL_RADIUS is injected as a #define at compile time.
+  // Radius 2 → 5×5 kernel (high/medium), radius 1 → 3×3 kernel (low).
+
   uniform sampler2D uRawDepth;
   uniform vec2 uTexelSize;
+  uniform float uSpatialSigma2;
 
   in vec2 vUv;
   out vec4 fragColor;
 
   void main() {
-    const float spatialSigma2 = 2.25;  // 1.5^2
     const float depthSigma2 = 0.01;    // 0.1^2
 
     float center = texture(uRawDepth, vUv).r;
     float totalWeight = 1.0;
     float totalDepth = center;
 
-    for (int dy = -2; dy <= 2; dy++) {
-      for (int dx = -2; dx <= 2; dx++) {
+    for (int dy = -BILATERAL_RADIUS; dy <= BILATERAL_RADIUS; dy++) {
+      for (int dx = -BILATERAL_RADIUS; dx <= BILATERAL_RADIUS; dx++) {
         if (dx == 0 && dy == 0) continue;
 
         vec2 offset = vec2(float(dx), float(dy)) * uTexelSize;
@@ -132,7 +137,7 @@ const BILATERAL_FRAGMENT_SHADER = /* glsl */ `#version 300 es
 
         float spatialDist2 = float(dx * dx + dy * dy);
         float depthDiff = neighbor - center;
-        float w = exp(-spatialDist2 / spatialSigma2 - (depthDiff * depthDiff) / depthSigma2);
+        float w = exp(-spatialDist2 / uSpatialSigma2 - (depthDiff * depthDiff) / depthSigma2);
 
         totalWeight += w;
         totalDepth += neighbor * w;
@@ -356,6 +361,15 @@ export interface ParallaxRendererConfig {
   overscanPadding: number;
 
   /**
+   * Adaptive quality tier. Controls render resolution, depth resolution,
+   * sample counts, and bilateral kernel size.
+   * - 'auto' — probe device capabilities and classify automatically.
+   * - 'high' / 'medium' / 'low' — use the specified tier directly.
+   * - undefined — defaults to 'auto'.
+   */
+  quality?: 'auto' | QualityTier;
+
+  /**
    * Depth-adaptive shader parameters.
    * When omitted, calibrated defaults matching the current hardcoded values
    * are used. When provided, the explicit value overrides the derived value.
@@ -458,15 +472,34 @@ type ParallaxPass = RenderPass & {
 // ---------------------------------------------------------------------------
 
 /** Uniform names for the bilateral filter shader. */
-const BILATERAL_UNIFORM_NAMES = ['uRawDepth', 'uTexelSize'] as const;
+const BILATERAL_UNIFORM_NAMES = ['uRawDepth', 'uTexelSize', 'uSpatialSigma2'] as const;
+
+/**
+ * Spatial sigma² values indexed by bilateral radius.
+ * Radius 2 → sigma=1.5 → sigma²=2.25 (5×5 kernel).
+ * Radius 1 → sigma=0.75 → sigma²=0.5625 (3×3 kernel).
+ */
+const SPATIAL_SIGMA2_BY_RADIUS: Record<number, number> = {
+  2: 2.25,   // 1.5²
+  1: 0.5625, // 0.75²
+};
 
 function createBilateralFilterPass(
-  gl: WebGL2RenderingContext
+  gl: WebGL2RenderingContext,
+  bilateralRadius: number
 ): BilateralFilterPass {
+  // Inject BILATERAL_RADIUS as a compile-time #define.
+  const fragSource = BILATERAL_FRAGMENT_SHADER.replace(
+    '#version 300 es',
+    `#version 300 es\n#define BILATERAL_RADIUS ${bilateralRadius}`
+  );
+
   const vertShader = compileShader(gl, gl.VERTEX_SHADER, BILATERAL_VERTEX_SHADER);
-  const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, BILATERAL_FRAGMENT_SHADER);
+  const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, fragSource);
   const program = linkProgram(gl, vertShader, fragShader);
   const uniforms = getUniformLocations(gl, program, BILATERAL_UNIFORM_NAMES);
+
+  const spatialSigma2 = SPATIAL_SIGMA2_BY_RADIUS[bilateralRadius] ?? 2.25;
 
   let fbo: WebGLFramebuffer | null = null;
 
@@ -512,6 +545,7 @@ function createBilateralFilterPass(
       gl.useProgram(program);
       gl.uniform1i(uniforms.uRawDepth, 2);
       gl.uniform2f(uniforms.uTexelSize, 1.0 / depthWidth, 1.0 / depthHeight);
+      gl.uniform1f(uniforms.uSpatialSigma2, spatialSigma2);
     },
 
     execute(
@@ -663,8 +697,14 @@ export class ParallaxRenderer {
   private readonly rawDepthSlot: TextureSlot;
 
   // ---- Depth data dimensions ----
+  /** GPU texture dimensions (may be clamped by quality tier). */
   private depthWidth = 0;
   private depthHeight = 0;
+  /** Original source depth dimensions (from precomputed data). */
+  private sourceDepthWidth = 0;
+  private sourceDepthHeight = 0;
+  /** Reusable buffer for subsampling depth data when GPU dims < source dims. */
+  private depthSubsampleBuffer: Uint8Array | null = null;
 
   // ---- Video dimensions (for cover-fit calculation) ----
   private videoAspect = 16 / 9;
@@ -697,6 +737,9 @@ export class ParallaxRenderer {
 
   /** Resolved config with all optional shader params filled from defaults. */
   private readonly config: ResolvedParallaxRendererConfig;
+
+  /** Adaptive quality parameters resolved at construction time. */
+  private readonly qualityParams: QualityParams;
 
   /**
    * Create the renderer and attach its canvas to the DOM.
@@ -742,6 +785,9 @@ export class ParallaxRenderer {
     if (!gl) throw new Error('WebGL 2 is not supported.');
     this.gl = gl;
 
+    // Resolve adaptive quality parameters (probes GPU if 'auto').
+    this.qualityParams = resolveQuality(gl, config.quality);
+
     // Set sRGB drawing buffer color space for correct color output.
     if ('drawingBufferColorSpace' in gl) {
       (gl as unknown as Record<string, string>).drawingBufferColorSpace = 'srgb';
@@ -781,8 +827,31 @@ export class ParallaxRenderer {
     this.disposeTextures();
 
     this.videoAspect = video.videoWidth / video.videoHeight;
-    this.depthWidth = depthWidth;
-    this.depthHeight = depthHeight;
+
+    // Store source depth dimensions (original precomputed data).
+    this.sourceDepthWidth = depthWidth;
+    this.sourceDepthHeight = depthHeight;
+
+    // Clamp depth dimensions to the quality tier's maximum.
+    // On low-end devices, a 512×512 depth map is downscaled to 256×256
+    // to reduce texture memory and bilateral filter work.
+    const maxDim = this.qualityParams.depthMaxDim;
+    let gpuDepthWidth = depthWidth;
+    let gpuDepthHeight = depthHeight;
+    if (gpuDepthWidth > maxDim || gpuDepthHeight > maxDim) {
+      const scale = maxDim / Math.max(gpuDepthWidth, gpuDepthHeight);
+      gpuDepthWidth = Math.max(1, Math.round(gpuDepthWidth * scale));
+      gpuDepthHeight = Math.max(1, Math.round(gpuDepthHeight * scale));
+    }
+    this.depthWidth = gpuDepthWidth;
+    this.depthHeight = gpuDepthHeight;
+
+    // Allocate subsample buffer if GPU dimensions differ from source.
+    if (gpuDepthWidth !== depthWidth || gpuDepthHeight !== depthHeight) {
+      this.depthSubsampleBuffer = new Uint8Array(gpuDepthWidth * gpuDepthHeight);
+    } else {
+      this.depthSubsampleBuffer = null;
+    }
 
     // --- Video texture (via TextureRegistry, unit 0) ---
     this.videoSlot.texture = gl.createTexture();
@@ -929,7 +998,8 @@ export class ParallaxRenderer {
     if (!gl) return;
 
     // Create render passes (each compiles its own shaders).
-    this.bilateralPass = createBilateralFilterPass(gl);
+    // Bilateral radius is injected as a compile-time #define.
+    this.bilateralPass = createBilateralFilterPass(gl, this.qualityParams.bilateralRadius);
     this.parallaxPass = createParallaxPass(gl);
 
     // Shared fullscreen quad VAO — used by both passes.
@@ -1054,7 +1124,28 @@ export class ParallaxRenderer {
       !this.rawDepthSlot.texture || !this.bilateralPass
     ) return;
 
-    const depthData = this.readDepth(timeSec);
+    let depthData = this.readDepth(timeSec);
+
+    // Subsample if GPU texture is smaller than source depth data.
+    // Nearest-neighbor sampling every Nth pixel — bilinear interpolation
+    // is handled by GL_LINEAR on the texture itself.
+    if (this.depthSubsampleBuffer) {
+      const buf = this.depthSubsampleBuffer;
+      const srcW = this.sourceDepthWidth;
+      const dstW = this.depthWidth;
+      const dstH = this.depthHeight;
+      for (let y = 0; y < dstH; y++) {
+        const srcY = Math.min(Math.round(y * srcW / dstW), this.sourceDepthHeight - 1);
+        const srcRowOffset = srcY * srcW;
+        const dstRowOffset = y * dstW;
+        for (let x = 0; x < dstW; x++) {
+          const srcX = Math.min(Math.round(x * srcW / dstW), srcW - 1);
+          buf[dstRowOffset + x] = depthData[srcRowOffset + srcX];
+        }
+      }
+      depthData = buf;
+    }
+
     this.bilateralPass.execute(
       gl,
       this.quadVao!,
@@ -1110,7 +1201,7 @@ export class ParallaxRenderer {
     if (!gl) return;
 
     const { width, height } = this.getViewportSize();
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    const dpr = Math.min(window.devicePixelRatio, this.qualityParams.dprCap);
 
     // Set the canvas drawing buffer to match the container at the device pixel ratio.
     const bufferWidth = Math.round(width * dpr);

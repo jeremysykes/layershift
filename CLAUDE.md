@@ -75,6 +75,7 @@ src/
       index.ts              Root barrel re-exporting all components
   parallax-renderer.ts      Parallax effect GPU pipeline (multi-pass)
   render-pass.ts            Render pass framework (shared)
+  quality.ts                Adaptive quality scaling (device probing, tier classification)
   webgl-utils.ts            Shared WebGL 2 helpers (compile, link, VAO)
   depth-analysis.ts         Parallax depth-adaptive parameter derivation
   precomputed-depth.ts      Binary depth loading + keyframe interpolation
@@ -109,7 +110,7 @@ scripts/
 > Full constraints are in `.claude/standards/invariants.md`. Summary below for quick reference.
 
 - **Zero per-frame overhead** from depth analysis. Analysis runs once at init.
-- **pomSteps is constant at 16.** Never derived or varied automatically.
+- **pomSteps defaults to 16.** May be reduced to 8 on low-end devices via the adaptive quality tier (see ADR-012). Never derived from depth analysis.
 - **All shader parameters are overrideable.** Optional fields in ParallaxRendererConfig, never enforced.
 - **Depth values 0-255 are all valid.** No sentinel exclusion.
 - **Deterministic outputs.** Same depth input always produces same derived parameters.

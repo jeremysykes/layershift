@@ -14,7 +14,7 @@ System rules governing the depth-adaptive parallax parameter derivation system. 
 
 - Depth analysis executes once during initialization, never during rendering
 - No allocations occur in the render loop as a result of this system
-- pomSteps is constant at 16. It is never derived or modified automatically.
+- pomSteps defaults to 16. It may be reduced to 8 on low-end devices via the adaptive quality tier (see ADR-012). It is never derived from depth analysis.
 - No additional texture lookups per fragment
 - No additional draw calls
 - No dynamic shader recompilation
@@ -70,7 +70,7 @@ finalValue = explicitConfig[param] ?? derivedParams[param] ?? calibratedDefaults
 | verticalReduction | 0.35 | 0.6 |
 | dofStart | 0.5 | 0.7 |
 | dofStrength | 0.25 | 0.5 |
-| pomSteps | 16 | 16 |
+| pomSteps | 8 | 16 |
 | overscanPadding | 0.06 | 0.10 |
 
 ## 7. Depth Encoding Rules

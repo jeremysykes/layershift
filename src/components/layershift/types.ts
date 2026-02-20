@@ -7,6 +7,8 @@ export interface LayershiftProps {
   parallaxMax?: number;
   layers?: number;
   overscan?: number;
+  /** Adaptive quality tier ('auto' | 'high' | 'medium' | 'low'). */
+  quality?: 'auto' | 'high' | 'medium' | 'low';
   autoplay?: boolean;
   loop?: boolean;
   muted?: boolean;
@@ -91,6 +93,8 @@ export interface LayershiftPortalProps {
   overscan?: number;
   /** POM ray-march step count for interior displacement. */
   pomSteps?: number;
+  /** Adaptive quality tier ('auto' | 'high' | 'medium' | 'low'). */
+  quality?: 'auto' | 'high' | 'medium' | 'low';
   // Boundary effects
   rimIntensity?: number;
   rimColor?: string;
