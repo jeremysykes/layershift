@@ -57,8 +57,9 @@ graph TD
 
     DA["depth-analysis.ts<br/><i>parameter derivation</i>"]
     PD["precomputed-depth.ts<br/><i>binary loading + interpolation</i>"]
-    PR["parallax-renderer.ts<br/><i>GPU pipeline</i>"]
+    PR["parallax-renderer.ts<br/><i>multi-pass GPU pipeline</i>"]
     PTR["portal-renderer.ts<br/><i>stencil pipeline</i>"]
+    WU["webgl-utils.ts<br/><i>shared WebGL helpers</i>"]
     SG["shape-generator.ts<br/><i>SVG → GPU mesh</i>"]
     IH["input-handler.ts<br/><i>mouse / gyro</i>"]
     VS["video-source.ts<br/><i>video element</i>"]
@@ -81,11 +82,15 @@ graph TD
     PORTAL_EL --> PTR
     PORTAL_EL --> SG
 
+    PR --> WU
+    PTR --> WU
+
     SITE --> ELEMENT
     SITE --> PORTAL_EL
 
     style DA fill:#e1f5fe
     style PR fill:#f3e5f5
     style PTR fill:#f3e5f5
+    style WU fill:#fff3e0
     style SG fill:#e8f5e9
 ```

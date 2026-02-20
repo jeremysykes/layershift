@@ -73,7 +73,8 @@ src/
       organisms/            Complex sections (Hero, StickyNav, Footer, etc.)
       templates/            Page-level wrappers (Content, RevealSection)
       index.ts              Root barrel re-exporting all components
-  parallax-renderer.ts      Parallax effect GPU pipeline
+  parallax-renderer.ts      Parallax effect GPU pipeline (multi-pass)
+  webgl-utils.ts            Shared WebGL 2 helpers (compile, link, VAO)
   depth-analysis.ts         Parallax depth-adaptive parameter derivation
   precomputed-depth.ts      Binary depth loading + keyframe interpolation
   input-handler.ts          Mouse/gyro input (shared)

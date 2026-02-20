@@ -37,8 +37,9 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 
 | File | Scope | Purpose |
 |------|-------|---------|
-| `parallax-renderer.ts` | Parallax | WebGL 2 renderer, GLSL shaders, render loops, GPU bilateral filter pass |
+| `parallax-renderer.ts` | Parallax | WebGL 2 renderer with multi-pass architecture: bilateral filter pass + parallax pass, each a self-contained factory-created unit sharing a single fullscreen quad VAO |
 | `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects) |
+| `webgl-utils.ts` | Shared | WebGL 2 helpers: `compileShader()`, `linkProgram()`, `getUniformLocations()`, `createFullscreenQuadVao()` — used by both renderers |
 | `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, keyframe interpolation |
@@ -80,7 +81,7 @@ See [parallax initialization diagram](./diagrams/parallax-initialization.md) for
 3. **Parameter derivation** (sync, O(1)): continuous functions mapping depth statistics to shader parameters
 4. **Config merge**: explicit > derived > calibrated defaults
 5. **Depth interpolator**: synchronous keyframe interpolation on main thread
-6. **Renderer setup**: WebGL 2 program, textures, bilateral filter FBO, uniforms set once
+6. **Renderer setup**: WebGL 2 render passes (bilateral filter + parallax, each via factory function), shared fullscreen quad VAO, textures, bilateral filter FBO, uniforms set once
 7. **Render loop start**: RAF + RVFC registration
 
 ### Render Loop
@@ -324,6 +325,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-007](./adr/ADR-007-vitepress-documentation-wiki.md) | VitePress documentation wiki integration |
 | [ADR-008](./adr/ADR-008-storybook-atomic-design-components.md) | Storybook integration with atomic design component structure |
 | [ADR-009](./adr/ADR-009-gpu-bilateral-filter.md) | GPU bilateral filter, Worker removal |
+| [ADR-010](./adr/ADR-010-multi-pass-renderer-architecture.md) | Multi-pass renderer architecture, shared WebGL utilities |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |
