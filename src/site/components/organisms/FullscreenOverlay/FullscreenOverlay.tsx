@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { LayershiftEffect } from '../LayershiftEffect';
 import { EffectErrorBoundary } from '../EffectErrorBoundary';
-import { VideoSelector } from '../../molecules/VideoSelector';
+import { VideoSelector, type WebcamState } from '../../molecules/VideoSelector';
 import type { VideoEntry } from '../../../types';
 
 interface FullscreenOverlayProps {
@@ -11,10 +11,17 @@ interface FullscreenOverlayProps {
   attrs: Record<string, string>;
   effectTitle: string;
   video: VideoEntry | null;
+  /** When true, the overlay uses the camera instead of a video source. */
+  isCamera?: boolean;
   videos: VideoEntry[];
   activeVideoId: string | null;
   onSelectVideo: (id: string) => void;
   onClose: () => void;
+  showWebcam?: boolean;
+  webcamState?: WebcamState;
+  webcamStream?: MediaStream | null;
+  onWebcamClick?: () => void;
+  isWebcamSelected?: boolean;
 }
 
 /**
@@ -27,10 +34,16 @@ export function FullscreenOverlay({
   attrs,
   effectTitle,
   video,
+  isCamera,
   videos,
   activeVideoId,
   onSelectVideo,
   onClose,
+  showWebcam,
+  webcamState = 'idle',
+  webcamStream = null,
+  onWebcamClick,
+  isWebcamSelected = false,
 }: FullscreenOverlayProps) {
   const [visible, setVisible] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -89,16 +102,18 @@ export function FullscreenOverlay({
     }
   }, [isTouchDevice]);
 
-  const fullscreenAttrs = {
-    ...attrs,
-    ...(video
-      ? {
-          src: video.src,
-          'depth-src': video.depthSrc,
-          'depth-meta': video.depthMeta,
-        }
-      : {}),
-  };
+  const fullscreenAttrs = isCamera
+    ? { ...attrs, 'source-type': 'camera' }
+    : {
+        ...attrs,
+        ...(video
+          ? {
+              src: video.src,
+              'depth-src': video.depthSrc,
+              'depth-meta': video.depthMeta,
+            }
+          : {}),
+      };
 
   const overlay = (
     <div
@@ -154,7 +169,7 @@ export function FullscreenOverlay({
       {/* Effect canvas — full viewport */}
       <div className="flex-1 relative">
         <EffectErrorBoundary
-          key={`fs-${tagName}-${video?.id}`}
+          key={`fs-${tagName}-${isCamera ? '__camera__' : video?.id}`}
           fallback={
             <div
               className="flex items-center justify-center"
@@ -169,7 +184,7 @@ export function FullscreenOverlay({
       </div>
 
       {/* Bottom bar — video selector filmstrip */}
-      {videos.length > 1 && (
+      {(videos.length + (showWebcam ? 1 : 0)) > 1 && (
         <div
           className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center px-6 pb-6 pt-10 transition-opacity duration-300"
           style={{
@@ -185,6 +200,11 @@ export function FullscreenOverlay({
             activeVideoId={activeVideoId}
             onSelect={onSelectVideo}
             large
+            showWebcam={showWebcam}
+            webcamState={webcamState}
+            webcamStream={webcamStream}
+            onWebcamClick={onWebcamClick}
+            isWebcamSelected={isWebcamSelected}
           />
         </div>
       )}

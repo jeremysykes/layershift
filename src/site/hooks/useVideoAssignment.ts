@@ -40,7 +40,7 @@ export function getVideosForEffect(
   activeEffect: string,
 ): VideoEntry[] {
   const category = EFFECT_VIDEO_CATEGORY[activeEffect] ?? 'parallax';
-  return videos[category];
+  return videos[category].filter((v) => v.type !== 'image');
 }
 
 /**

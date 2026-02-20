@@ -25,12 +25,13 @@
 
 import { RendererBase } from './renderer-base';
 import type { ParallaxRendererConfig } from './parallax-renderer';
+import type { MediaSource } from './media-source';
 import { resolveQualityWebGPU } from './quality';
 import {
   createFullscreenQuadBuffer,
   createUniformBuffer,
   createLinearSampler,
-  importVideoFrame,
+  importImageSource,
 } from './webgpu-utils';
 import { FULLSCREEN_QUAD_LAYOUT } from './render-pass-webgpu';
 
@@ -207,21 +208,22 @@ export class ParallaxRendererWebGPU extends RendererBase {
   /**
    * Set up textures, write static uniforms, and build bind groups.
    *
-   * Call this once after the video element and depth data are loaded.
+   * Call this once after the media source and depth data are loaded.
    */
   initialize(
-    video: HTMLVideoElement,
+    source: MediaSource,
     depthWidth: number,
     depthHeight: number
   ): void {
     this.disposeTextures();
 
-    this.videoAspect = video.videoWidth / video.videoHeight;
+    this.isCameraSource = source.type === 'camera';
+    this.videoAspect = source.width / source.height;
     this.clampDepthDimensions(depthWidth, depthHeight, this.qualityParams.depthMaxDim);
 
     // ---- Video texture ----
     this.videoTexture = this.device.createTexture({
-      size: [video.videoWidth, video.videoHeight],
+      size: [source.width, source.height],
       format: 'rgba8unorm',
       usage:
         GPUTextureUsage.TEXTURE_BINDING |
@@ -263,7 +265,7 @@ export class ParallaxRendererWebGPU extends RendererBase {
     );
 
     // ---- Write fragment static uniforms ----
-    this.writeStaticFragmentUniforms(video.videoWidth, video.videoHeight);
+    this.writeStaticFragmentUniforms(source.width, source.height);
 
     // ---- Rebuild bind groups (reference newly created textures) ----
     this.rebuildBilateralBindGroup();
@@ -462,7 +464,7 @@ export class ParallaxRendererWebGPU extends RendererBase {
    * 3. Render fullscreen quad with parallax shader to canvas.
    */
   protected onRenderFrame(): void {
-    const video = this.playbackVideo;
+    const source = this.mediaSource;
     if (
       !this.context ||
       !this.parallaxPipeline ||
@@ -470,18 +472,17 @@ export class ParallaxRendererWebGPU extends RendererBase {
       !this.quadBuffer
     ) return;
 
-    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      return;
-    }
+    const imageSource = source?.getImageSource();
+    if (!imageSource) return;
 
     // Upload video frame (zero-copy where supported).
     if (this.videoTexture) {
-      importVideoFrame(this.device, this.videoTexture, video);
+      importImageSource(this.device, this.videoTexture, imageSource, source!.width, source!.height);
     }
 
     // Fallback: when RVFC is not supported, do depth update here.
     if (!this.rvfcSupported) {
-      this.onDepthUpdate(video.currentTime);
+      this.onDepthUpdate(source!.currentTime);
     }
 
     // Update per-frame parallax offset from mouse/gyro input.

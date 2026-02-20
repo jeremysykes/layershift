@@ -54,6 +54,13 @@ export interface ManagedElement {
    * Does NOT need to handle the abort controller — the manager owns that.
    */
   doDispose(): void;
+
+  /**
+   * Optional custom readiness check. When provided, replaces the default
+   * gate (all reinitAttributes must be present) with element-specific
+   * logic — e.g. camera mode doesn't require src/depth-src/depth-meta.
+   */
+  canInit?(): boolean;
 }
 
 /**
@@ -115,8 +122,12 @@ export class LifecycleManager {
     const el = this.element;
     if (!el.isConnected) return;
 
-    for (const attr of el.reinitAttributes) {
-      if (!el.getAttribute(attr)) return;
+    if (el.canInit) {
+      if (!el.canInit()) return;
+    } else {
+      for (const attr of el.reinitAttributes) {
+        if (!el.getAttribute(attr)) return;
+      }
     }
 
     this.cancelInit();

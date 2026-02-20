@@ -10,6 +10,8 @@ interface InlineDemoProps {
   tagName: string;
   demoAttrs: Record<string, string>;
   video: VideoEntry | null;
+  /** When true, the demo uses the camera instead of a video source. */
+  isCamera?: boolean;
   /** Called when the user clicks the fullscreen trigger */
   onEnterFullscreen?: () => void;
 }
@@ -20,7 +22,7 @@ interface InlineDemoProps {
  * scrolls near the viewport (200 px ahead), avoiding unnecessary GPU
  * and network cost for content the user hasn't reached yet.
  */
-export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: InlineDemoProps) {
+export function InlineDemo({ tagName, demoAttrs, video, isCamera, onEnterFullscreen }: InlineDemoProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [ready, setReady] = useState(false);
@@ -29,10 +31,12 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
     typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
   );
 
-  // Reset ready state when video changes
+  const sourceKey = isCamera ? '__camera__' : video?.id;
+
+  // Reset ready state when source changes
   useEffect(() => {
     setReady(false);
-  }, [video?.id]);
+  }, [sourceKey]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -53,6 +57,9 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
   }, []);
 
   const attrs = useMemo(() => {
+    if (isCamera) {
+      return { ...demoAttrs, 'source-type': 'camera' };
+    }
     if (!video) return demoAttrs;
     return {
       ...demoAttrs,
@@ -60,7 +67,7 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
       'depth-src': video.depthSrc,
       'depth-meta': video.depthMeta,
     };
-  }, [demoAttrs, video]);
+  }, [demoAttrs, video, isCamera]);
 
   const handleReady = useCallback(() => setReady(true), []);
 
@@ -74,7 +81,7 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
     >
       {visible && (
         <EffectErrorBoundary
-          key={`${tagName}-${video?.id}`}
+          key={`${tagName}-${sourceKey}`}
           fallback={
             <div
               className="flex flex-col items-center justify-center gap-2"

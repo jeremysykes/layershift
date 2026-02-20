@@ -1,1 +1,1 @@
-export { VideoSelector } from './VideoSelector';
+export { VideoSelector, CAMERA_SENTINEL, type WebcamState } from './VideoSelector';

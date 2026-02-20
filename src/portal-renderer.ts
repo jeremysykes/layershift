@@ -38,6 +38,7 @@ import { JFADistanceField } from './jfa-distance-field';
 import type { QualityTier } from './quality';
 import { resolveQuality } from './quality';
 import { RendererBase } from './renderer-base';
+import type { MediaSource } from './media-source';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders (imported from external files via Vite ?raw)
@@ -431,7 +432,7 @@ export class PortalRenderer extends RendererBase {
   }
 
   initialize(
-    video: HTMLVideoElement,
+    source: MediaSource,
     depthWidth: number,
     depthHeight: number,
     mesh: ShapeMesh
@@ -446,7 +447,8 @@ export class PortalRenderer extends RendererBase {
     this.disposeBoundaryGeometry();
     this.disposeChamferGeometry();
 
-    this.videoAspect = video.videoWidth / video.videoHeight;
+    this.isCameraSource = source.type === 'camera';
+    this.videoAspect = source.width / source.height;
     this.meshAspect = mesh.aspect;
 
     // Clamp depth dimensions to the quality tier's maximum.
@@ -498,7 +500,7 @@ export class PortalRenderer extends RendererBase {
       gl.uniform1f(this.interiorPass.uniforms.uVerticalReduction, this.config.verticalReduction);
       gl.uniform1f(this.interiorPass.uniforms.uDofStart, this.config.dofStart);
       gl.uniform1f(this.interiorPass.uniforms.uDofStrength, this.config.dofStrength);
-      gl.uniform2f(this.interiorPass.uniforms.uImageTexelSize, 1.0 / video.videoWidth, 1.0 / video.videoHeight);
+      gl.uniform2f(this.interiorPass.uniforms.uImageTexelSize, 1.0 / source.width, 1.0 / source.height);
       gl.uniform1f(this.interiorPass.uniforms.uFogDensity, this.config.fogDensity);
       gl.uniform3f(this.interiorPass.uniforms.uFogColor, ...this.config.fogColor);
       gl.uniform1f(this.interiorPass.uniforms.uColorShift, this.config.colorShift);
@@ -819,9 +821,10 @@ export class PortalRenderer extends RendererBase {
    */
   protected onRenderFrame(): void {
     const gl = this.gl;
-    const video = this.playbackVideo;
+    const source = this.mediaSource;
     if (!gl || !this.interiorPass || !this.quadVao) return;
-    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    const imageSource = source?.getImageSource();
+    if (!imageSource) return;
     if (!this.interiorFbo || !this.interiorColorTex || !this.interiorDepthTex) return;
 
     // Compute distance field if needed (runs once on resize)
@@ -834,11 +837,11 @@ export class PortalRenderer extends RendererBase {
     // Upload current video frame
     gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
     gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageSource);
 
     // Fallback depth update
     if (!this.rvfcSupported) {
-      this.onDepthUpdate(video.currentTime);
+      this.onDepthUpdate(source!.currentTime);
     }
 
     // Read input
@@ -1057,7 +1060,7 @@ export class PortalRenderer extends RendererBase {
     this.initGPUResources();
     // Rebuild FBOs and JFA resources (destroyed on context loss)
     this.recalculateViewportLayout();
-    if (this.playbackVideo) {
+    if (this.mediaSource) {
       this.animationFrameHandle = window.requestAnimationFrame(() => this.onRenderFrame());
     }
   }

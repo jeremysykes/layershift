@@ -43,6 +43,7 @@ import { buildEdgeMesh, buildChamferMesh } from './portal-renderer';
 import { resolveQualityWebGPU } from './quality';
 import { JFADistanceField } from './jfa-distance-field';
 import type { ShapeMesh } from './shape-generator';
+import type { MediaSource } from './media-source';
 import {
   createFullscreenQuadBuffer,
   createUniformBuffer,
@@ -50,7 +51,7 @@ import {
   createNearestSampler,
   createVertexBuffer,
   createIndexBuffer,
-  importVideoFrame,
+  importImageSource,
 } from './webgpu-utils';
 import {
   FULLSCREEN_QUAD_LAYOUT,
@@ -376,7 +377,7 @@ export class PortalRendererWebGPU extends RendererBase {
   // -----------------------------------------------------------------------
 
   initialize(
-    video: HTMLVideoElement,
+    source: MediaSource,
     depthWidth: number,
     depthHeight: number,
     mesh: ShapeMesh
@@ -384,13 +385,14 @@ export class PortalRendererWebGPU extends RendererBase {
     this.disposeTextures();
     this.disposeGeometryBuffers();
 
-    this.videoAspect = video.videoWidth / video.videoHeight;
+    this.isCameraSource = source.type === 'camera';
+    this.videoAspect = source.width / source.height;
     this.meshAspect = mesh.aspect;
     this.clampDepthDimensions(depthWidth, depthHeight, this.qualityParams.depthMaxDim);
 
     // ---- Video texture ----
     this.videoTexture = this.device.createTexture({
-      size: [video.videoWidth, video.videoHeight],
+      size: [source.width, source.height],
       format: 'rgba8unorm',
       usage:
         GPUTextureUsage.TEXTURE_BINDING |
@@ -416,7 +418,7 @@ export class PortalRendererWebGPU extends RendererBase {
     this.uploadChamferMesh(mesh);
 
     // ---- Write static uniforms ----
-    this.writeStaticInteriorUniforms(video.videoWidth, video.videoHeight);
+    this.writeStaticInteriorUniforms(source.width, source.height);
     this.writeStaticCompositeUniforms();
     this.writeStaticChamferUniforms();
     this.writeStaticBoundaryUniforms();
@@ -1394,24 +1396,25 @@ export class PortalRendererWebGPU extends RendererBase {
    * JFA: runs inside command encoder when dirty (cached on resize).
    */
   protected onRenderFrame(): void {
-    const video = this.playbackVideo;
+    const source = this.mediaSource;
     if (
       !this.context ||
       !this.interiorPipeline ||
       !this.interiorBindGroup ||
       !this.quadBuffer
     ) return;
-    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    const imageSource = source?.getImageSource();
+    if (!imageSource) return;
     if (!this.interiorColorView || !this.interiorDepthView) return;
 
     // Upload video frame.
     if (this.videoTexture) {
-      importVideoFrame(this.device, this.videoTexture, video);
+      importImageSource(this.device, this.videoTexture, imageSource, source!.width, source!.height);
     }
 
     // Fallback depth update when RVFC is not available.
     if (!this.rvfcSupported) {
-      this.onDepthUpdate(video.currentTime);
+      this.onDepthUpdate(source!.currentTime);
     }
 
     // Read input.

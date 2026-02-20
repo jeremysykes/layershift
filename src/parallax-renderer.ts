@@ -43,6 +43,7 @@ import { TextureRegistry } from './render-pass';
 import type { QualityTier } from './quality';
 import { resolveQuality } from './quality';
 import { RendererBase } from './renderer-base';
+import type { MediaSource } from './media-source';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders (imported from external files via Vite ?raw)
@@ -464,20 +465,21 @@ export class ParallaxRenderer extends RendererBase {
    * Set up the scene: create video texture, depth textures + FBO, and
    * set static shader uniforms.
    *
-   * Call this once after the video element and depth data are loaded.
+   * Call this once after the media source and depth data are loaded.
    *
-   * @param video - The <video> element to sample color frames from.
-   *   Must already have metadata loaded (videoWidth/videoHeight set).
+   * @param source - The media source to sample color frames from.
+   *   Must already have dimensions available (width/height set).
    * @param depthWidth - Width of the precomputed depth map (e.g. 512).
    * @param depthHeight - Height of the precomputed depth map (e.g. 512).
    */
-  initialize(video: HTMLVideoElement, depthWidth: number, depthHeight: number): void {
+  initialize(source: MediaSource, depthWidth: number, depthHeight: number): void {
     const gl = this.gl;
     if (!gl) return;
 
     this.disposeTextures();
 
-    this.videoAspect = video.videoWidth / video.videoHeight;
+    this.isCameraSource = source.type === 'camera';
+    this.videoAspect = source.width / source.height;
 
     // Clamp depth dimensions to the quality tier's maximum.
     this.clampDepthDimensions(depthWidth, depthHeight, this.qualityParams.depthMaxDim);
@@ -521,7 +523,7 @@ export class ParallaxRenderer extends RendererBase {
 
     // --- Set parallax pass static uniforms ---
     if (this.parallaxPass) {
-      this.parallaxPass.setStaticUniforms(gl, this.config, video.videoWidth, video.videoHeight);
+      this.parallaxPass.setStaticUniforms(gl, this.config, source.width, source.height);
     }
 
     // Size everything to the current viewport.
@@ -573,29 +575,24 @@ export class ParallaxRenderer extends RendererBase {
    */
   protected onRenderFrame(): void {
     const gl = this.gl;
-    const video = this.playbackVideo;
+    const source = this.mediaSource;
     if (!gl || !this.parallaxPass || !this.quadVao) {
       return;
     }
 
-    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      // Skip this frame — keep the previous frame on screen.
-      // This avoids a flash to black during video loop transitions
-      // where readyState briefly drops.
-      return;
-    }
+    const imageSource = source?.getImageSource();
+    if (!imageSource) return;
 
     gl.useProgram(this.parallaxPass.program);
 
     // Upload the current video frame to the GPU.
-    // Y-flip is handled globally (UNPACK_FLIP_Y_WEBGL set once in constructor).
     gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
     gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageSource);
 
     // Fallback: when RVFC is not supported, do depth update here.
     if (!this.rvfcSupported) {
-      this.onDepthUpdate(video.currentTime);
+      this.onDepthUpdate(source!.currentTime);
     }
 
     // Update the parallax offset from mouse/gyro input — always at RAF rate.
@@ -697,12 +694,12 @@ export class ParallaxRenderer extends RendererBase {
     this.initGPUResources();
 
     // Re-initialize textures if we had them before.
-    if (this.playbackVideo && this.depthWidth > 0) {
-      this.initialize(this.playbackVideo, this.depthWidth, this.depthHeight);
+    if (this.mediaSource && this.depthWidth > 0) {
+      this.initialize(this.mediaSource, this.depthWidth, this.depthHeight);
     }
 
     // Restart the render loop.
-    if (this.playbackVideo) {
+    if (this.mediaSource) {
       this.animationFrameHandle = window.requestAnimationFrame(() => this.onRenderFrame());
     }
   }

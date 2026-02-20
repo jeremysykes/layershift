@@ -16,11 +16,13 @@
 import {
   DepthFrameInterpolator,
   loadPrecomputedDepth,
+  type PrecomputedDepthData,
 } from '../../precomputed-depth';
 import { analyzeDepthFrames, deriveParallaxParams } from '../../depth-analysis';
 import { ParallaxRenderer } from '../../parallax-renderer';
 import { ParallaxRendererWebGPU } from '../../parallax-renderer-webgpu';
 import { detectGPUBackend } from '../../gpu-backend';
+import { createVideoSource, createImageSource, createCameraSource, type MediaSource } from '../../media-source';
 import type { ParallaxInput } from '../../input-handler';
 import type {
   LayershiftReadyDetail,
@@ -198,20 +200,27 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
 
   static get observedAttributes(): string[] {
     return [
-      'src', 'depth-src', 'depth-meta',
+      'src', 'depth-src', 'depth-meta', 'source-type',
       'parallax-x', 'parallax-y', 'parallax-max',
       'layers', 'overscan', 'quality', 'gpu-backend',
       'autoplay', 'loop', 'muted',
     ];
   }
 
-  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta'];
+  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'source-type'];
+
+  canInit(): boolean {
+    if (this.sourceType === 'camera') return true;
+    return !!this.getAttribute('src')
+      && !!this.getAttribute('depth-src')
+      && !!this.getAttribute('depth-meta');
+  }
 
   private shadow: ShadowRoot;
   private container: HTMLDivElement | null = null;
   private renderer: ParallaxRenderer | ParallaxRendererWebGPU | null = null;
   private inputHandler: ComponentInputHandler | null = null;
-  private video: HTMLVideoElement | null = null;
+  private source: MediaSource | null = null;
   private loopCount = 0;
   private readonly lifecycle: LifecycleManager;
 
@@ -253,6 +262,9 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     if (val === 'webgpu' || val === 'webgl2') return val;
     return 'auto';
   }
+  private get sourceType(): 'video' | 'camera' {
+    return this.getAttribute('source-type') === 'camera' ? 'camera' : 'video';
+  }
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
   private get shouldMute(): boolean { return this.getAttrBool('muted', DEFAULTS.muted); }
@@ -278,29 +290,27 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
    * Attach native video event listeners and re-dispatch them
    * as namespaced custom events on the host element.
    */
-  private attachVideoEventListeners(video: HTMLVideoElement): void {
-    video.addEventListener('play', () => {
+  private attachSourceEventListeners(source: MediaSource): void {
+    if (!source.addEventListener) return;
+
+    source.addEventListener('play', (() => {
       this.emit<LayershiftPlayDetail>('layershift-parallax:play', {
-        currentTime: video.currentTime,
+        currentTime: source.currentTime,
       });
-    });
+    }) as EventListener);
 
-    video.addEventListener('pause', () => {
+    source.addEventListener('pause', (() => {
       this.emit<LayershiftPauseDetail>('layershift-parallax:pause', {
-        currentTime: video.currentTime,
+        currentTime: source.currentTime,
       });
-    });
+    }) as EventListener);
 
-    video.addEventListener('ended', () => {
-      // The 'ended' event fires on a looping video just before the
-      // browser resets currentTime to 0 and continues playback.
-      if (video.loop) {
-        this.loopCount += 1;
-        this.emit<LayershiftLoopDetail>('layershift-parallax:loop', {
-          loopCount: this.loopCount,
-        });
-      }
-    });
+    source.addEventListener('ended', (() => {
+      this.loopCount += 1;
+      this.emit<LayershiftLoopDetail>('layershift-parallax:loop', {
+        loopCount: this.loopCount,
+      });
+    }) as EventListener);
   }
 
   // --- Lifecycle ---
@@ -354,31 +364,48 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
   // --- Initialization ---
 
   async doInit(signal: AbortSignal): Promise<void> {
-    const src = this.getAttribute('src')!;
-    const depthSrc = this.getAttribute('depth-src')!;
-    const depthMeta = this.getAttribute('depth-meta')!;
-
     if (!this.container) return;
 
-    try {
-      // Load video and depth data in parallel
-      const [video, depthData] = await Promise.all([
-        this.createVideoElement(src),
-        loadPrecomputedDepth(depthSrc, depthMeta),
-      ]);
+    const isCamera = this.sourceType === 'camera';
 
-      // Check if cancelled during loading
-      if (signal.aborted) {
-        video.remove();
-        return;
+    try {
+      let source: MediaSource;
+      let depthData: PrecomputedDepthData;
+
+      if (isCamera) {
+        source = await createCameraSource(
+          { video: { facingMode: 'user' } },
+          { parent: this.shadow },
+        );
+        if (signal.aborted) { source.dispose(); return; }
+        depthData = createFlatDepthData(source.width, source.height);
+      } else {
+        const src = this.getAttribute('src')!;
+        const depthSrc = this.getAttribute('depth-src')!;
+        const depthMeta = this.getAttribute('depth-meta')!;
+
+        const isImage = /\.(jpe?g|png|webp|gif|avif|bmp)(\?|$)/i.test(src);
+
+        const [mediaResult, loadedDepth] = await Promise.all([
+          isImage
+            ? createImageSource(src)
+            : createVideoSource(src, {
+                parent: this.shadow,
+                loop: this.shouldLoop,
+                muted: this.shouldMute,
+              }),
+          loadPrecomputedDepth(depthSrc, depthMeta),
+        ]);
+
+        if (signal.aborted) { mediaResult.dispose(); return; }
+        source = mediaResult;
+        depthData = loadedDepth;
       }
 
-      this.video = video;
+      this.source = source;
       this.loopCount = 0;
-      this.attachVideoEventListeners(video);
+      this.attachSourceEventListeners(source);
 
-      // Analyze depth data and derive optimal parallax parameters.
-      // Runs once, synchronous, <5ms.
       const depthProfile = analyzeDepthFrames(
         depthData.frames,
         depthData.meta.width,
@@ -386,28 +413,21 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
       );
       const derivedParams = deriveParallaxParams(depthProfile);
 
-      // Override precedence: explicit attributes > derived > calibrated defaults.
-      // hasAttribute() distinguishes "user explicitly set it" from "using fallback".
       const parallaxStrength = this.hasAttribute('parallax-max')
-        ? this.parallaxMax / Math.max(video.videoWidth, 1)
+        ? this.parallaxMax / Math.max(source.width, 1)
         : derivedParams.parallaxStrength;
 
       const overscanPadding = this.hasAttribute('overscan')
         ? this.overscan
         : derivedParams.overscanPadding;
 
-      // Create depth interpolator — synchronous keyframe blending.
-      // The bilateral filter now runs on the GPU as a dedicated shader
-      // pass inside the renderer, so no Web Worker is needed.
       const interpolator = new DepthFrameInterpolator(depthData);
       const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
-      // Detect GPU backend (WebGPU with WebGL2 fallback).
       const backend = await detectGPUBackend(this.gpuBackend);
 
       if (signal.aborted) return;
 
-      // Create renderer with merged config: explicit overrides > derived > defaults.
       const rendererConfig = {
         parallaxStrength,
         pomEnabled: true,
@@ -432,17 +452,15 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         this.renderer = new ParallaxRenderer(this.container!, rendererConfig);
       }
 
-      this.renderer.initialize(video, depthData.meta.width, depthData.meta.height);
+      this.renderer.initialize(source, depthData.meta.width, depthData.meta.height);
 
-      // Create input handler scoped to this element
       this.inputHandler = new ComponentInputHandler(this);
 
-      // Start the render loop with axis multipliers applied
       const pxFactor = this.parallaxX;
       const pyFactor = this.parallaxY;
 
       this.renderer.start(
-        video,
+        source,
         readDepth,
         () => {
           if (!this.inputHandler) return { x: 0, y: 0 };
@@ -452,7 +470,6 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
             y: raw.y * pyFactor,
           };
         },
-        // RVFC callback: dispatch 'frame' event on each new video frame
         (currentTime: number, frameNumber: number) => {
           this.emit<LayershiftFrameDetail>('layershift-parallax:frame', {
             currentTime,
@@ -461,27 +478,22 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         }
       );
 
-      // Start playback if autoplay is set
-      if (this.shouldAutoplay) {
-        video.currentTime = 0;
+      if (!isCamera && source.isLive && this.shouldAutoplay && source.play) {
         try {
-          await video.play();
+          await source.play();
         } catch {
-          // Autoplay may be blocked by browser policy — not an error
+          // Autoplay may be blocked by browser policy
         }
       }
 
-      // Final abort check — video.play() is the last await, and abort
-      // could fire during it (Strict Mode unmount). Don't mark as
-      // initialized if the element was disconnected mid-init.
       if (signal.aborted) return;
 
       this.lifecycle.markInitialized();
 
       this.emit<LayershiftReadyDetail>('layershift-parallax:ready', {
-        videoWidth: video.videoWidth,
-        videoHeight: video.videoHeight,
-        duration: video.duration,
+        videoWidth: source.width,
+        videoHeight: source.height,
+        duration: 0,
         depthProfile,
         derivedParams,
       });
@@ -492,62 +504,17 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     }
   }
 
-  // --- Video element ---
-
-  private async createVideoElement(url: string): Promise<HTMLVideoElement> {
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.setAttribute('crossorigin', 'anonymous');
-    video.playsInline = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', 'true');
-    video.muted = this.shouldMute;
-    video.defaultMuted = this.shouldMute;
-    if (this.shouldMute) video.setAttribute('muted', '');
-    video.loop = this.shouldLoop;
-    video.preload = 'auto';
-    video.style.display = 'none';
-    video.src = url;
-
-    // Append to shadow DOM so it's contained
-    this.shadow.appendChild(video);
-
-    await new Promise<void>((resolve, reject) => {
-      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        resolve();
-        return;
-      }
-      const onLoaded = () => { cleanup(); resolve(); };
-      const onError = () => { cleanup(); reject(new Error('Failed to load video metadata.')); };
-      const cleanup = () => {
-        video.removeEventListener('loadedmetadata', onLoaded);
-        video.removeEventListener('error', onError);
-      };
-      video.addEventListener('loadedmetadata', onLoaded);
-      video.addEventListener('error', onError);
-      video.load();
-    });
-
-    return video;
-  }
-
   // --- Cleanup ---
 
   doDispose(): void {
-    // Renderer.dispose() handles WebGL context release internally
     this.renderer?.dispose();
     this.renderer = null;
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
 
-    if (this.video) {
-      this.video.pause();
-      this.video.removeAttribute('src');
-      this.video.load();
-      this.video.remove();
-      this.video = null;
-    }
+    this.source?.dispose();
+    this.source = null;
 
     this.loopCount = 0;
     this.container = null;
@@ -564,4 +531,18 @@ function clamp(value: number, min: number, max: number): number {
 
 function lerp(from: number, to: number, amount: number): number {
   return from + (to - from) * amount;
+}
+
+/**
+ * Generate a single-frame flat depth map (mid-gray 128) for sources
+ * that lack precomputed depth data, such as live camera feeds.
+ */
+function createFlatDepthData(width: number, height: number): PrecomputedDepthData {
+  const pixels = width * height;
+  const frame = new Uint8Array(pixels);
+  frame.fill(128);
+  return {
+    meta: { frameCount: 1, fps: 1, width, height, sourceFps: 1 },
+    frames: [frame],
+  };
 }

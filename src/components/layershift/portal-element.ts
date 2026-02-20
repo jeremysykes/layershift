@@ -18,10 +18,12 @@
 import {
   DepthFrameInterpolator,
   loadPrecomputedDepth,
+  type PrecomputedDepthData,
 } from '../../precomputed-depth';
 import { PortalRenderer, type PortalRendererConfig } from '../../portal-renderer';
 import { PortalRendererWebGPU } from '../../portal-renderer-webgpu';
 import { detectGPUBackend } from '../../gpu-backend';
+import { createVideoSource, createCameraSource, type MediaSource } from '../../media-source';
 import { generateMeshFromSVG, type ShapeMesh } from '../../shape-generator';
 import type { ParallaxInput } from '../../input-handler';
 import type {
@@ -233,7 +235,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
 
   static get observedAttributes(): string[] {
     return [
-      'src', 'depth-src', 'depth-meta', 'logo-src',
+      'src', 'depth-src', 'depth-meta', 'logo-src', 'source-type',
       'parallax-x', 'parallax-y', 'parallax-max', 'overscan', 'pom-steps',
       'quality', 'gpu-backend',
       'rim-intensity', 'rim-color', 'rim-width',
@@ -253,13 +255,21 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     ];
   }
 
-  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'logo-src'];
+  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'logo-src', 'source-type'];
+
+  canInit(): boolean {
+    if (this.sourceType === 'camera') return !!this.getAttribute('logo-src');
+    return !!this.getAttribute('src')
+      && !!this.getAttribute('depth-src')
+      && !!this.getAttribute('depth-meta')
+      && !!this.getAttribute('logo-src');
+  }
 
   private shadow: ShadowRoot;
   private container: HTMLDivElement | null = null;
   private renderer: PortalRenderer | PortalRendererWebGPU | null = null;
   private inputHandler: ComponentInputHandler | null = null;
-  private video: HTMLVideoElement | null = null;
+  private source: MediaSource | null = null;
   private mesh: ShapeMesh | null = null;
   private loopCount = 0;
   private readonly lifecycle: LifecycleManager;
@@ -301,6 +311,9 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     return [fb[0], fb[1], fb[2]];
   }
 
+  private get sourceType(): 'video' | 'camera' {
+    return this.getAttribute('source-type') === 'camera' ? 'camera' : 'video';
+  }
   private get parallaxX(): number { return this.getAttrFloat('parallax-x', DEFAULTS.parallaxX); }
   private get parallaxY(): number { return this.getAttrFloat('parallax-y', DEFAULTS.parallaxY); }
   private get parallaxMax(): number { return this.getAttrFloat('parallax-max', DEFAULTS.parallaxMax); }
@@ -375,27 +388,27 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     );
   }
 
-  private attachVideoEventListeners(video: HTMLVideoElement): void {
-    video.addEventListener('play', () => {
+  private attachSourceEventListeners(source: MediaSource): void {
+    if (!source.addEventListener) return;
+
+    source.addEventListener('play', (() => {
       this.emit<LayershiftPortalPlayDetail>('layershift-portal:play', {
-        currentTime: video.currentTime,
+        currentTime: source.currentTime,
       });
-    });
+    }) as EventListener);
 
-    video.addEventListener('pause', () => {
+    source.addEventListener('pause', (() => {
       this.emit<LayershiftPortalPauseDetail>('layershift-portal:pause', {
-        currentTime: video.currentTime,
+        currentTime: source.currentTime,
       });
-    });
+    }) as EventListener);
 
-    video.addEventListener('ended', () => {
-      if (video.loop) {
-        this.loopCount += 1;
-        this.emit<LayershiftPortalLoopDetail>('layershift-portal:loop', {
-          loopCount: this.loopCount,
-        });
-      }
-    });
+    source.addEventListener('ended', (() => {
+      this.loopCount += 1;
+      this.emit<LayershiftPortalLoopDetail>('layershift-portal:loop', {
+        loopCount: this.loopCount,
+      });
+    }) as EventListener);
   }
 
   // --- Lifecycle (delegated to LifecycleManager) ---
@@ -449,92 +462,101 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
   // --- Initialization ---
 
   async doInit(signal: AbortSignal): Promise<void> {
-    const src = this.getAttribute('src')!;
-    const depthSrc = this.getAttribute('depth-src')!;
-    const depthMeta = this.getAttribute('depth-meta')!;
     const logoSrc = this.getAttribute('logo-src')!;
-
     if (!this.container) return;
 
-    try {
-      // Load video, depth data, and SVG mesh in parallel
-      const [video, depthData, mesh] = await Promise.all([
-        this.createVideoElement(src),
-        loadPrecomputedDepth(depthSrc, depthMeta),
-        generateMeshFromSVG(logoSrc),
-      ]);
+    const isCamera = this.sourceType === 'camera';
 
-      // Check if cancelled during loading
-      if (signal.aborted) {
-        video.remove();
-        return;
+    try {
+      let source: MediaSource;
+      let depthData: PrecomputedDepthData;
+      let mesh: ShapeMesh;
+
+      if (isCamera) {
+        const [cameraSource, shapeMesh] = await Promise.all([
+          createCameraSource(
+            { video: { facingMode: 'user' } },
+            { parent: this.shadow },
+          ),
+          generateMeshFromSVG(logoSrc),
+        ]);
+        if (signal.aborted) { cameraSource.dispose(); return; }
+        source = cameraSource;
+        depthData = createFlatDepthData(source.width, source.height);
+        mesh = shapeMesh;
+      } else {
+        const src = this.getAttribute('src')!;
+        const depthSrc = this.getAttribute('depth-src')!;
+        const depthMeta = this.getAttribute('depth-meta')!;
+
+        const [videoSource, loadedDepth, shapeMesh] = await Promise.all([
+          createVideoSource(src, {
+            parent: this.shadow,
+            loop: this.shouldLoop,
+            muted: this.shouldMute,
+          }),
+          loadPrecomputedDepth(depthSrc, depthMeta),
+          generateMeshFromSVG(logoSrc),
+        ]);
+
+        if (signal.aborted) { videoSource.dispose(); return; }
+        source = videoSource;
+        depthData = loadedDepth;
+        mesh = shapeMesh;
       }
 
-      this.video = video;
+      this.source = source;
       this.mesh = mesh;
       this.loopCount = 0;
-      this.attachVideoEventListeners(video);
+      this.attachSourceEventListeners(source);
 
-      // Compute parallax strength from parallax-max attribute
-      const parallaxStrength = this.parallaxMax / Math.max(video.videoWidth, 1);
+      const parallaxStrength = this.parallaxMax / Math.max(source.width, 1);
 
-      // Create depth interpolator — synchronous keyframe blending.
-      // The bilateral filter runs on the GPU as a dedicated shader pass.
       const interpolator = new DepthFrameInterpolator(depthData);
       const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
-      // Create renderer
       const config: PortalRendererConfig = {
         parallaxStrength,
         overscanPadding: this.overscan,
         pomSteps: this.pomSteps,
         quality: this.quality,
-        // Boundary
         rimLightIntensity: this.rimIntensity,
         rimLightColor: this.rimColor,
         rimLightWidth: this.rimWidth,
         refractionStrength: this.refractionStrength,
         chromaticStrength: this.chromaticStrength,
         occlusionIntensity: this.occlusionIntensity,
-        // Lens transform
         depthPower: this.depthPower,
         depthScale: this.depthScale,
         depthBias: this.depthBias,
-        // Interior mood
         fogDensity: this.fogDensity,
         fogColor: this.fogColor,
         colorShift: this.colorShift,
         brightnessBias: this.brightnessBias,
-        // Depth-adaptive
         contrastLow: this.contrastLow,
         contrastHigh: this.contrastHigh,
         verticalReduction: this.verticalReduction,
         dofStart: this.dofStart,
         dofStrength: this.dofStrength,
-        // Bevel / dimensional typography
         bevelIntensity: this.bevelIntensity,
         bevelWidth: this.bevelWidth,
         bevelDarkening: this.bevelDarkening,
         bevelDesaturation: this.bevelDesaturation,
         bevelLightAngle: this.bevelLightAngle,
-        // Volumetric edge wall
         edgeThickness: this.edgeThickness,
         edgeSpecular: this.edgeSpecular,
         edgeColor: this.edgeColor,
-        // Chamfer geometry
         chamferWidth: this.chamferWidth,
         chamferAngle: this.chamferAngle,
         chamferColor: this.chamferColor,
         chamferAmbient: this.chamferAmbient,
         chamferSpecular: this.chamferSpecular,
         chamferShininess: this.chamferShininess,
-        // Edge occlusion
         edgeOcclusionWidth: this.edgeOcclusionWidth,
         edgeOcclusionStrength: this.edgeOcclusionStrength,
         lightDirection: this.lightDirection3,
       };
 
-      // Detect GPU backend (WebGPU with WebGL2 fallback).
       const backend = await detectGPUBackend(this.gpuBackend);
 
       if (signal.aborted) return;
@@ -546,17 +568,15 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
       } else {
         this.renderer = new PortalRenderer(this.container!, config);
       }
-      this.renderer.initialize(video, depthData.meta.width, depthData.meta.height, mesh);
+      this.renderer.initialize(source, depthData.meta.width, depthData.meta.height, mesh);
 
-      // Create input handler scoped to this element
       this.inputHandler = new ComponentInputHandler(this);
 
-      // Start render loop with axis multipliers
       const pxFactor = this.parallaxX;
       const pyFactor = this.parallaxY;
 
       this.renderer.start(
-        video,
+        source,
         readDepth,
         () => {
           if (!this.inputHandler) return { x: 0, y: 0 };
@@ -571,23 +591,18 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         }
       );
 
-      // Autoplay
-      if (this.shouldAutoplay) {
-        video.currentTime = 0;
-        try { await video.play(); } catch { /* Autoplay blocked */ }
+      if (!isCamera && this.shouldAutoplay && source.play) {
+        try { await source.play(); } catch { /* Autoplay blocked */ }
       }
 
-      // Final abort check — video.play() is the last await, and abort
-      // could fire during it (Strict Mode unmount). Don't mark as
-      // initialized if the element was disconnected mid-init.
       if (signal.aborted) return;
 
       this.lifecycle.markInitialized();
 
       this.emit<LayershiftPortalReadyDetail>('layershift-portal:ready', {
-        videoWidth: video.videoWidth,
-        videoHeight: video.videoHeight,
-        duration: video.duration,
+        videoWidth: source.width,
+        videoHeight: source.height,
+        duration: 0,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to initialize.';
@@ -596,61 +611,17 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     }
   }
 
-  // --- Video element ---
-
-  private async createVideoElement(url: string): Promise<HTMLVideoElement> {
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.setAttribute('crossorigin', 'anonymous');
-    video.playsInline = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', 'true');
-    video.muted = this.shouldMute;
-    video.defaultMuted = this.shouldMute;
-    if (this.shouldMute) video.setAttribute('muted', '');
-    video.loop = this.shouldLoop;
-    video.preload = 'auto';
-    video.style.display = 'none';
-    video.src = url;
-
-    this.shadow.appendChild(video);
-
-    await new Promise<void>((resolve, reject) => {
-      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        resolve();
-        return;
-      }
-      const onLoaded = () => { cleanup(); resolve(); };
-      const onError = () => { cleanup(); reject(new Error('Failed to load video metadata.')); };
-      const cleanup = () => {
-        video.removeEventListener('loadedmetadata', onLoaded);
-        video.removeEventListener('error', onError);
-      };
-      video.addEventListener('loadedmetadata', onLoaded);
-      video.addEventListener('error', onError);
-      video.load();
-    });
-
-    return video;
-  }
-
   // --- Cleanup ---
 
   doDispose(): void {
-    // Renderer.dispose() handles WebGL context release internally
     this.renderer?.dispose();
     this.renderer = null;
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
 
-    if (this.video) {
-      this.video.pause();
-      this.video.removeAttribute('src');
-      this.video.load();
-      this.video.remove();
-      this.video = null;
-    }
+    this.source?.dispose();
+    this.source = null;
 
     this.mesh = null;
     this.loopCount = 0;
@@ -668,6 +639,15 @@ function clamp(value: number, min: number, max: number): number {
 
 function lerp(from: number, to: number, amount: number): number {
   return from + (to - from) * amount;
+}
+
+function createFlatDepthData(width: number, height: number): PrecomputedDepthData {
+  const frame = new Uint8Array(width * height);
+  frame.fill(128);
+  return {
+    meta: { frameCount: 1, fps: 1, width, height, sourceFps: 1 },
+    frames: [frame],
+  };
 }
 
 /** Parse a CSS color string (#rrggbb or #rgb) to [r, g, b] in 0-1 range. */

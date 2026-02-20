@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, VideoOff } from 'lucide-react';
 import type { VideoEntry } from '../../../types';
+
+export const CAMERA_SENTINEL = '__camera__' as const;
 
 /** Convert a kebab-case ID into a Title Case label. */
 function formatLabel(id: string): string {
@@ -60,12 +62,159 @@ function extractThumb(videoSrc: string): Promise<string> {
   });
 }
 
+export type WebcamState = 'idle' | 'pending' | 'active' | 'error';
+
+// ---------------------------------------------------------------------------
+// WebcamTile — four-state camera tile at the end of the filmstrip
+// ---------------------------------------------------------------------------
+
+function WebcamTile({
+  state,
+  stream,
+  isSelected,
+  onClick,
+  w,
+  h,
+}: {
+  state: WebcamState;
+  stream: MediaStream | null;
+  isSelected: boolean;
+  onClick: () => void;
+  w: number;
+  h: number;
+}) {
+  const previewRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el || !stream) return;
+    el.srcObject = stream;
+    return () => { el.srcObject = null; };
+  }, [stream]);
+
+  const isActive = state === 'active' && isSelected;
+  const hasLivePreview = state === 'active' && stream;
+  const isPending = state === 'pending';
+  const isError = state === 'error';
+
+  const ariaLabel =
+    isPending ? 'Requesting camera access…' :
+    isActive ? 'Your camera (live)' :
+    isError ? 'Camera unavailable — click to retry' :
+    'Use your camera';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={isActive}
+      title={isError ? 'Camera access denied — click to retry' : undefined}
+      className="shrink-0 relative rounded-lg overflow-hidden transition-all duration-200 cursor-pointer"
+      style={{
+        width: w,
+        height: h,
+        background: '#111',
+        border: isActive
+          ? '2px solid rgba(255, 255, 255, 0.8)'
+          : isPending
+            ? '2px solid rgba(255, 255, 255, 0.3)'
+            : '2px solid transparent',
+        opacity: isActive ? 1 : isError ? 0.35 : isPending ? 0.7 : 0.5,
+        outline: 'none',
+        pointerEvents: isPending ? 'none' : 'auto',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.opacity = isError ? '0.5' : '0.8';
+          e.currentTarget.style.borderColor = isError
+            ? 'rgba(255, 255, 255, 0.15)'
+            : 'rgba(255, 255, 255, 0.3)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.opacity = isError ? '0.35' : isPending ? '0.7' : '0.5';
+          e.currentTarget.style.borderColor = isPending
+            ? 'rgba(255, 255, 255, 0.3)'
+            : 'transparent';
+        }
+      }}
+    >
+      {/* Live preview (active state with stream) */}
+      {hasLivePreview && (
+        <video
+          ref={previewRef}
+          muted
+          autoPlay
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
+        />
+      )}
+
+      {/* LIVE badge */}
+      {isActive && hasLivePreview && (
+        <span
+          className="absolute top-1 right-1 text-white font-bold uppercase tracking-wider rounded-sm"
+          style={{
+            fontSize: '0.45rem',
+            background: 'rgba(239, 68, 68, 0.9)',
+            padding: '1px 4px',
+            lineHeight: 1.4,
+          }}
+        >
+          LIVE
+        </span>
+      )}
+
+      {/* Idle icon */}
+      {!hasLivePreview && !isPending && !isError && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Video size={20} style={{ color: 'rgba(255, 255, 255, 0.4)' }} />
+        </div>
+      )}
+
+      {/* Pending pulsing dot */}
+      {isPending && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span
+            className="pulse-dot block rounded-full"
+            style={{
+              width: 6,
+              height: 6,
+              background: 'rgba(255, 255, 255, 0.5)',
+              animation: 'pulse-dot 1.5s ease-in-out infinite',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Error icon */}
+      {isError && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <VideoOff size={20} style={{ color: 'rgba(255, 255, 255, 0.25)' }} />
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VideoSelector
+// ---------------------------------------------------------------------------
+
 interface VideoSelectorProps {
   videos: VideoEntry[];
   activeVideoId: string | null;
   onSelect: (id: string) => void;
   /** Larger thumbnails for fullscreen context */
   large?: boolean;
+  showWebcam?: boolean;
+  webcamState?: WebcamState;
+  webcamStream?: MediaStream | null;
+  onWebcamClick?: () => void;
+  isWebcamSelected?: boolean;
 }
 
 /** gap-2 = 8px in Tailwind */
@@ -76,7 +225,17 @@ const GAP = 8;
  * video to view the effect on. Desktop: left/right arrows + edge gradient
  * masks. Touch: native swipe + gradient masks only.
  */
-export function VideoSelector({ videos, activeVideoId, onSelect, large }: VideoSelectorProps) {
+export function VideoSelector({
+  videos,
+  activeVideoId,
+  onSelect,
+  large,
+  showWebcam,
+  webcamState = 'idle',
+  webcamStream = null,
+  onWebcamClick,
+  isWebcamSelected = false,
+}: VideoSelectorProps) {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -148,7 +307,8 @@ export function VideoSelector({ videos, activeVideoId, onSelect, large }: VideoS
     [onSelect],
   );
 
-  if (videos.length <= 1) return null;
+  const itemCount = videos.length + (showWebcam ? 1 : 0);
+  if (itemCount <= 1) return null;
 
   return (
     <div className={large ? '' : 'max-w-[640px] mx-auto mt-3 mb-6'}>
@@ -234,7 +394,7 @@ export function VideoSelector({ videos, activeVideoId, onSelect, large }: VideoS
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {videos.map((video) => {
-            const isActive = video.id === activeVideoId;
+            const isActive = video.id === activeVideoId && !isWebcamSelected;
             return (
               <button
                 key={video.id}
@@ -283,18 +443,43 @@ export function VideoSelector({ videos, activeVideoId, onSelect, large }: VideoS
               </button>
             );
           })}
+
+          {/* Divider + Webcam tile */}
+          {showWebcam && onWebcamClick && (
+            <>
+              <div
+                className="shrink-0 self-center"
+                style={{
+                  width: 1,
+                  height: h,
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  margin: '0 4px',
+                }}
+              />
+              <WebcamTile
+                state={webcamState}
+                stream={webcamStream ?? null}
+                isSelected={isWebcamSelected}
+                onClick={onWebcamClick}
+                w={w}
+                h={h}
+              />
+            </>
+          )}
         </div>
       </div>
-      {!large && activeVideoId && (
+      {!large && (
         <p
           className="text-center text-xs mt-1"
           style={{ color: '#555' }}
         >
-          {formatLabel(
-            videos.find((v) => v.id === activeVideoId)?.label ??
-            videos.find((v) => v.id === activeVideoId)?.id ??
-            '',
-          )}
+          {isWebcamSelected
+            ? 'Your Camera'
+            : formatLabel(
+                videos.find((v) => v.id === activeVideoId)?.label ??
+                videos.find((v) => v.id === activeVideoId)?.id ??
+                '',
+              )}
         </p>
       )}
     </div>
