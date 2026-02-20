@@ -198,7 +198,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     return [
       'src', 'depth-src', 'depth-meta',
       'parallax-x', 'parallax-y', 'parallax-max',
-      'layers', 'overscan',
+      'layers', 'overscan', 'quality',
       'autoplay', 'loop', 'muted',
     ];
   }
@@ -241,6 +241,11 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
   private get parallaxY(): number { return this.getAttrFloat('parallax-y', DEFAULTS.parallaxY); }
   private get parallaxMax(): number { return this.getAttrFloat('parallax-max', DEFAULTS.parallaxMax); }
   private get overscan(): number { return this.getAttrFloat('overscan', DEFAULTS.overscan); }
+  private get quality(): 'auto' | 'high' | 'medium' | 'low' | undefined {
+    const val = this.getAttribute('quality');
+    if (val === 'auto' || val === 'high' || val === 'medium' || val === 'low') return val;
+    return undefined;
+  }
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
   private get shouldMute(): boolean { return this.getAttrBool('muted', DEFAULTS.muted); }
@@ -396,6 +401,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         pomEnabled: true,
         pomSteps: derivedParams.pomSteps,
         overscanPadding,
+        quality: this.quality,
         contrastLow: derivedParams.contrastLow,
         contrastHigh: derivedParams.contrastHigh,
         verticalReduction: derivedParams.verticalReduction,

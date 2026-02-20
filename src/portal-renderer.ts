@@ -35,6 +35,8 @@ import type { ShapeMesh } from './shape-generator';
 import { compileShader, linkProgram, getUniformLocations, createFullscreenQuadVao } from './webgl-utils';
 import type { RenderPass, TextureSlot } from './render-pass';
 import { createPass, TextureRegistry } from './render-pass';
+import type { QualityTier, QualityParams } from './quality';
+import { resolveQuality } from './quality';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders
@@ -633,6 +635,14 @@ export interface PortalRendererConfig {
   overscanPadding: number;
   /** POM step count for interior (default: 16). */
   pomSteps: number;
+  /**
+   * Adaptive quality tier. Controls render resolution, JFA resolution,
+   * depth resolution, and sample counts.
+   * - 'auto' — probe device capabilities and classify automatically.
+   * - 'high' / 'medium' / 'low' — use the specified tier directly.
+   * - undefined — defaults to 'auto'.
+   */
+  quality?: 'auto' | QualityTier;
   // Rim / boundary
   rimLightIntensity: number;
   rimLightColor: [number, number, number];
@@ -935,8 +945,14 @@ export class PortalRenderer {
   private hasColorBufferFloat = false;
 
   // Dimensions
+  /** GPU texture dimensions (may be clamped by quality tier). */
   private depthWidth = 0;
   private depthHeight = 0;
+  /** Original source depth dimensions (from precomputed data). */
+  private sourceDepthWidth = 0;
+  private sourceDepthHeight = 0;
+  /** Reusable buffer for subsampling depth data when GPU dims < source dims. */
+  private depthSubsampleBuffer: Uint8Array | null = null;
   private videoAspect = 16 / 9;
   private meshAspect = 1;
   private meshScaleX = 0.65;
@@ -965,6 +981,9 @@ export class PortalRenderer {
   private lightDir3: [number, number, number] = [-0.5, 0.7, -0.3];
 
   private readonly config: PortalRendererConfig;
+
+  /** Adaptive quality parameters resolved at construction time. */
+  private readonly qualityParams: QualityParams;
 
   constructor(parent: HTMLElement, config: PortalRendererConfig) {
     this.container = parent;
@@ -997,6 +1016,9 @@ export class PortalRenderer {
     });
     if (!gl) throw new Error('WebGL 2 is not supported.');
     this.gl = gl;
+
+    // Resolve adaptive quality parameters (probes GPU if 'auto').
+    this.qualityParams = resolveQuality(gl, config.quality);
 
     if ('drawingBufferColorSpace' in gl) {
       (gl as unknown as Record<string, string>).drawingBufferColorSpace = 'srgb';
@@ -1037,8 +1059,29 @@ export class PortalRenderer {
 
     this.videoAspect = video.videoWidth / video.videoHeight;
     this.meshAspect = mesh.aspect;
-    this.depthWidth = depthWidth;
-    this.depthHeight = depthHeight;
+
+    // Store source depth dimensions (original precomputed data).
+    this.sourceDepthWidth = depthWidth;
+    this.sourceDepthHeight = depthHeight;
+
+    // Clamp depth dimensions to the quality tier's maximum.
+    const maxDim = this.qualityParams.depthMaxDim;
+    let gpuDepthWidth = depthWidth;
+    let gpuDepthHeight = depthHeight;
+    if (gpuDepthWidth > maxDim || gpuDepthHeight > maxDim) {
+      const scale = maxDim / Math.max(gpuDepthWidth, gpuDepthHeight);
+      gpuDepthWidth = Math.max(1, Math.round(gpuDepthWidth * scale));
+      gpuDepthHeight = Math.max(1, Math.round(gpuDepthHeight * scale));
+    }
+    this.depthWidth = gpuDepthWidth;
+    this.depthHeight = gpuDepthHeight;
+
+    // Allocate subsample buffer if GPU dimensions differ from source.
+    if (gpuDepthWidth !== depthWidth || gpuDepthHeight !== depthHeight) {
+      this.depthSubsampleBuffer = new Uint8Array(gpuDepthWidth * gpuDepthHeight);
+    } else {
+      this.depthSubsampleBuffer = null;
+    }
 
     // --- Source video texture (via TextureRegistry, unit 0) ---
     this.videoSlot.texture = gl.createTexture();
@@ -1057,7 +1100,7 @@ export class PortalRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, depthWidth, depthHeight);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, this.depthWidth, this.depthHeight);
 
     // --- Logo stencil mesh ---
     this.uploadStencilMesh(mesh);
@@ -1322,9 +1365,10 @@ export class PortalRenderer {
 
     this.disposeJFA();
 
-    // Half resolution for JFA
-    const w = Math.max(1, Math.round(canvasWidth / 2));
-    const h = Math.max(1, Math.round(canvasHeight / 2));
+    // Reduced resolution for JFA (divisor set by quality tier: 2 = half, 4 = quarter).
+    const div = this.qualityParams.jfaDivisor;
+    const w = Math.max(1, Math.round(canvasWidth / div));
+    const h = Math.max(1, Math.round(canvasHeight / div));
     this.jfaWidth = w;
     this.jfaHeight = h;
 
@@ -1750,7 +1794,26 @@ export class PortalRenderer {
   private updateDepthTexture(timeSec: number): void {
     const gl = this.gl;
     if (!gl || !this.readDepth || !this.depthSlot.texture) return;
-    const depthData = this.readDepth(timeSec);
+    let depthData = this.readDepth(timeSec);
+
+    // Subsample if GPU texture is smaller than source depth data.
+    if (this.depthSubsampleBuffer) {
+      const buf = this.depthSubsampleBuffer;
+      const srcW = this.sourceDepthWidth;
+      const dstW = this.depthWidth;
+      const dstH = this.depthHeight;
+      for (let y = 0; y < dstH; y++) {
+        const srcY = Math.min(Math.round(y * srcW / dstW), this.sourceDepthHeight - 1);
+        const srcRowOffset = srcY * srcW;
+        const dstRowOffset = y * dstW;
+        for (let x = 0; x < dstW; x++) {
+          const srcX = Math.min(Math.round(x * srcW / dstW), srcW - 1);
+          buf[dstRowOffset + x] = depthData[srcRowOffset + srcX];
+        }
+      }
+      depthData = buf;
+    }
+
     gl.activeTexture(gl.TEXTURE0 + this.depthSlot.unit);
     gl.bindTexture(gl.TEXTURE_2D, this.depthSlot.texture);
     gl.texSubImage2D(
@@ -1790,7 +1853,7 @@ export class PortalRenderer {
     if (!gl) return;
 
     const { width, height } = this.getViewportSize();
-    const dpr = Math.min(window.devicePixelRatio, 2);
+    const dpr = Math.min(window.devicePixelRatio, this.qualityParams.dprCap);
 
     const bufferWidth = Math.round(width * dpr);
     const bufferHeight = Math.round(height * dpr);
@@ -1806,9 +1869,10 @@ export class PortalRenderer {
       this.createFBO(bufferWidth, bufferHeight);
     }
 
-    // Create/resize JFA resources at half resolution
-    const jfaW = Math.max(1, Math.round(bufferWidth / 2));
-    const jfaH = Math.max(1, Math.round(bufferHeight / 2));
+    // Create/resize JFA resources at reduced resolution (divisor from quality tier).
+    const jfaDiv = this.qualityParams.jfaDivisor;
+    const jfaW = Math.max(1, Math.round(bufferWidth / jfaDiv));
+    const jfaH = Math.max(1, Math.round(bufferHeight / jfaDiv));
     if (this.jfaWidth !== jfaW || this.jfaHeight !== jfaH) {
       this.createJFAResources(bufferWidth, bufferHeight);
     }

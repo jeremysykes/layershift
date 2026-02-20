@@ -40,6 +40,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | `parallax-renderer.ts` | Parallax | WebGL 2 renderer with multi-pass architecture: bilateral filter pass + parallax pass, each a self-contained factory-created unit sharing a single fullscreen quad VAO |
 | `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects) |
 | `render-pass.ts` | Shared | Render pass framework: `RenderPass`, `FBOPass`, `TextureRegistry`, `createPass()`, `createFBOPass()`, `createMRTPass()` — used by both renderers |
+| `quality.ts` | Shared | Adaptive quality scaling: device probing, tier classification (high/medium/low), concrete parameter resolution — used by both renderers |
 | `webgl-utils.ts` | Shared | WebGL 2 helpers: `compileShader()`, `linkProgram()`, `getUniformLocations()`, `createFullscreenQuadVao()` — used by both renderers |
 | `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
@@ -328,6 +329,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-009](./adr/ADR-009-gpu-bilateral-filter.md) | GPU bilateral filter, Worker removal |
 | [ADR-010](./adr/ADR-010-multi-pass-renderer-architecture.md) | Multi-pass renderer architecture, shared WebGL utilities |
 | [ADR-011](./adr/ADR-011-shared-render-pass-framework.md) | Shared render pass framework for cross-effect compositing |
+| [ADR-012](./adr/ADR-012-adaptive-quality-scaling.md) | Adaptive quality scaling based on device capability |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |

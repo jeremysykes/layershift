@@ -60,6 +60,7 @@ graph TD
     PR["parallax-renderer.ts<br/><i>multi-pass GPU pipeline</i>"]
     PTR["portal-renderer.ts<br/><i>stencil pipeline</i>"]
     RP["render-pass.ts<br/><i>render pass framework</i>"]
+    QS["quality.ts<br/><i>adaptive quality scaling</i>"]
     WU["webgl-utils.ts<br/><i>shared WebGL helpers</i>"]
     SG["shape-generator.ts<br/><i>SVG → GPU mesh</i>"]
     IH["input-handler.ts<br/><i>mouse / gyro</i>"]
@@ -84,8 +85,10 @@ graph TD
     PORTAL_EL --> SG
 
     PR --> RP
+    PR --> QS
     PR --> WU
     PTR --> RP
+    PTR --> QS
     PTR --> WU
 
     SITE --> ELEMENT
@@ -95,6 +98,7 @@ graph TD
     style PR fill:#f3e5f5
     style PTR fill:#f3e5f5
     style RP fill:#fff3e0
+    style QS fill:#fff3e0
     style WU fill:#fff3e0
     style SG fill:#e8f5e9
 ```

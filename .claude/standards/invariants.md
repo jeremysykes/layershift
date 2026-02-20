@@ -6,7 +6,7 @@ These are project-wide constraints that all agents and skills must respect. They
 
 Source of truth: `docs/parallax/depth-derivation-rules.md`
 
-1. **pomSteps is constant at 16.** Never derived or varied automatically.
+1. **pomSteps defaults to 16.** May be reduced to 8 on low-end devices via the adaptive quality tier (see ADR-012). Never derived from depth analysis.
 2. **Zero per-frame overhead from depth analysis.** Analysis runs once at init, never during render.
 3. **All depth values 0-255 are valid.** No sentinel exclusion.
 4. **Deterministic outputs.** Same depth input always produces same derived parameters.
