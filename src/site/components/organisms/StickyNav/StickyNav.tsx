@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Github, BookOpen, Layers } from 'lucide-react';
+import { Github } from 'lucide-react';
 import { EffectSelector } from '../../molecules/EffectSelector';
 import { DOCS_URL, STORYBOOK_URL } from '../../../lib/nav';
 
 /**
  * Sticky navigation header that slides in after scrolling past the hero.
  * Contains: wordmark (scroll-to-top), effect switcher, GitHub link.
+ *
+ * Mobile (<640px): wordmark + effect tabs + GitHub icon only.
+ * Docs and Components links appear at sm+ where there is room.
  */
 export function StickyNav() {
   const [visible, setVisible] = useState(false);
@@ -50,8 +53,7 @@ export function StickyNav() {
 
         <EffectSelector compact />
 
-        <div className="flex items-center gap-1 sm:gap-3">
-          {/* Text links: visible at sm+ */}
+        <div className="flex items-center gap-3">
           <a
             href={DOCS_URL}
             className="hidden sm:inline-block text-xs hover:text-white transition-colors"
@@ -65,24 +67,6 @@ export function StickyNav() {
             style={{ color: '#777' }}
           >
             Components
-          </a>
-
-          {/* Icon links: visible on mobile only */}
-          <a
-            href={DOCS_URL}
-            aria-label="Documentation"
-            className="sm:hidden inline-flex items-center justify-center hover:text-white transition-colors"
-            style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
-          >
-            <BookOpen className="w-[18px] h-[18px]" />
-          </a>
-          <a
-            href={STORYBOOK_URL}
-            aria-label="Component library"
-            className="sm:hidden inline-flex items-center justify-center hover:text-white transition-colors"
-            style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
-          >
-            <Layers className="w-[18px] h-[18px]" />
           </a>
 
           <a
