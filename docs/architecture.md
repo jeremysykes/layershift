@@ -260,7 +260,7 @@ The depth system is shared infrastructure — not specific to the parallax effec
 
 ### Runtime Interpolation
 
-`DepthFrameInterpolator` provides synchronous keyframe interpolation at any playback time, returning raw Uint8 depth data. Bilateral filtering is performed as a GPU shader pass in the renderer (see [ADR-009](./adr/ADR-009-gpu-bilateral-filter-worker-removal.md)).
+`DepthFrameInterpolator` provides synchronous keyframe interpolation at any playback time, returning raw Uint8 depth data. Bilateral filtering is performed as a GPU shader pass in the renderer (see [ADR-009](./adr/ADR-009-gpu-bilateral-filter.md)).
 
 ## Build System
 
@@ -323,7 +323,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-006](./adr/ADR-006-portal-v4-emissive-chamfer-nesting.md) | Portal v4: emissive interior, geometric chamfer, nesting-based hole detection |
 | [ADR-007](./adr/ADR-007-vitepress-documentation-wiki.md) | VitePress documentation wiki integration |
 | [ADR-008](./adr/ADR-008-storybook-atomic-design-components.md) | Storybook integration with atomic design component structure |
-| [ADR-009](./adr/ADR-009-gpu-bilateral-filter-worker-removal.md) | GPU bilateral filter, Worker removal |
+| [ADR-009](./adr/ADR-009-gpu-bilateral-filter.md) | GPU bilateral filter, Worker removal |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |
