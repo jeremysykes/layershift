@@ -5,6 +5,8 @@
 export interface EffectManifestEntry {
   id: string;
   label: string;
+  /** Abbreviated label for compact contexts (e.g. sticky nav) */
+  shortLabel?: string;
   enabled: boolean;
 }
 

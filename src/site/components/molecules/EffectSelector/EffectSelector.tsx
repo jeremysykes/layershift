@@ -31,9 +31,9 @@ export function EffectSelector({ compact }: EffectSelectorProps) {
           <TabsTrigger
             key={e.id}
             value={e.id}
-            className={compact ? 'text-xs py-2 px-3' : 'text-[0.95rem] font-medium'}
+            className={compact ? 'text-xs py-2 px-4' : 'text-[0.95rem] font-medium'}
           >
-            {e.label}
+            {compact ? (e.shortLabel ?? e.label) : e.label}
           </TabsTrigger>
         ))}
       </TabsList>

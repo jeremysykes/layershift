@@ -4,43 +4,50 @@
       "id": "fashion-rain",
       "src": "/videos/parallax/fashion-rain/video.mp4",
       "depthSrc": "/videos/parallax/fashion-rain/depth-data.bin",
-      "depthMeta": "/videos/parallax/fashion-rain/depth-meta.json"
+      "depthMeta": "/videos/parallax/fashion-rain/depth-meta.json",
+      "thumb": "/videos/parallax/fashion-rain/thumb.jpg"
     },
     {
       "id": "sneaker-drop",
       "src": "/videos/parallax/sneaker-drop/video.mp4",
       "depthSrc": "/videos/parallax/sneaker-drop/depth-data.bin",
-      "depthMeta": "/videos/parallax/sneaker-drop/depth-meta.json"
+      "depthMeta": "/videos/parallax/sneaker-drop/depth-meta.json",
+      "thumb": "/videos/parallax/sneaker-drop/thumb.jpg"
     },
     {
       "id": "luxury-perfume",
       "src": "/videos/parallax/luxury-perfume/video.mp4",
       "depthSrc": "/videos/parallax/luxury-perfume/depth-data.bin",
-      "depthMeta": "/videos/parallax/luxury-perfume/depth-meta.json"
+      "depthMeta": "/videos/parallax/luxury-perfume/depth-meta.json",
+      "thumb": "/videos/parallax/luxury-perfume/thumb.jpg"
     },
     {
       "id": "canyon-car",
       "src": "/videos/parallax/canyon-car/video.mp4",
       "depthSrc": "/videos/parallax/canyon-car/depth-data.bin",
-      "depthMeta": "/videos/parallax/canyon-car/depth-meta.json"
+      "depthMeta": "/videos/parallax/canyon-car/depth-meta.json",
+      "thumb": "/videos/parallax/canyon-car/thumb.jpg"
     },
     {
       "id": "modern-interior",
       "src": "/videos/parallax/modern-interior/video.mp4",
       "depthSrc": "/videos/parallax/modern-interior/depth-data.bin",
-      "depthMeta": "/videos/parallax/modern-interior/depth-meta.json"
+      "depthMeta": "/videos/parallax/modern-interior/depth-meta.json",
+      "thumb": "/videos/parallax/modern-interior/thumb.jpg"
     },
     {
       "id": "whiskey-glass",
       "src": "/videos/parallax/whiskey-glass/video.mp4",
       "depthSrc": "/videos/parallax/whiskey-glass/depth-data.bin",
-      "depthMeta": "/videos/parallax/whiskey-glass/depth-meta.json"
+      "depthMeta": "/videos/parallax/whiskey-glass/depth-meta.json",
+      "thumb": "/videos/parallax/whiskey-glass/thumb.jpg"
     },
     {
       "id": "tech-product",
       "src": "/videos/parallax/tech-product/video.mp4",
       "depthSrc": "/videos/parallax/tech-product/depth-data.bin",
-      "depthMeta": "/videos/parallax/tech-product/depth-meta.json"
+      "depthMeta": "/videos/parallax/tech-product/depth-meta.json",
+      "thumb": "/videos/parallax/tech-product/thumb.jpg"
     }
   ],
   "textural": [
@@ -48,13 +55,15 @@
       "id": "liquid-chrome",
       "src": "/videos/textural/liquid-chrome/video.mp4",
       "depthSrc": "/videos/textural/liquid-chrome/depth-data.bin",
-      "depthMeta": "/videos/textural/liquid-chrome/depth-meta.json"
+      "depthMeta": "/videos/textural/liquid-chrome/depth-meta.json",
+      "thumb": "/videos/textural/liquid-chrome/thumb.jpg"
     },
     {
       "id": "neon-energy",
       "src": "/videos/textural/neon-energy/video.mp4",
       "depthSrc": "/videos/textural/neon-energy/depth-data.bin",
-      "depthMeta": "/videos/textural/neon-energy/depth-meta.json"
+      "depthMeta": "/videos/textural/neon-energy/depth-meta.json",
+      "thumb": "/videos/textural/neon-energy/thumb.jpg"
     }
   ]
 }

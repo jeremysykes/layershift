@@ -22,31 +22,41 @@ function extractThumb(videoSrc: string): Promise<string> {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.muted = true;
-    video.preload = 'metadata';
+    video.playsInline = true;
+    video.preload = 'auto';
     video.src = videoSrc;
 
-    const onSeeked = () => {
+    let resolved = false;
+    const finish = (dataUrl: string) => {
+      if (resolved) return;
+      resolved = true;
+      if (dataUrl) thumbCache.set(videoSrc, dataUrl);
+      resolve(dataUrl);
+      video.removeAttribute('src');
+      video.load();
+    };
+
+    const capture = () => {
       const canvas = document.createElement('canvas');
       canvas.width = 160;
       canvas.height = 90;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, 160, 90);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        thumbCache.set(videoSrc, dataUrl);
-        resolve(dataUrl);
+        finish(canvas.toDataURL('image/jpeg', 0.7));
       } else {
-        resolve('');
+        finish('');
       }
-      video.removeAttribute('src');
-      video.load();
     };
 
-    video.addEventListener('seeked', onSeeked, { once: true });
+    video.addEventListener('seeked', capture, { once: true });
     video.addEventListener('loadeddata', () => {
       video.currentTime = 0.5;
     }, { once: true });
-    video.addEventListener('error', () => resolve(''), { once: true });
+    video.addEventListener('error', () => finish(''), { once: true });
+
+    // Timeout: mobile may never fire events for background video loads
+    setTimeout(() => finish(''), 5000);
   });
 }
 
