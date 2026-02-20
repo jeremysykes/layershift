@@ -9,7 +9,6 @@ flowchart TD
     subgraph "Source"
         SRC_SITE["src/main.ts + src/site/<br/><i>landing page</i>"]
         SRC_COMP["src/components/layershift/index.ts<br/><i>Web Component entry</i>"]
-        WORKER_SRC["depth-worker.ts"]
     end
 
     subgraph "npm run build"
@@ -22,12 +21,11 @@ flowchart TD
 
     subgraph "Outputs"
         DIST_SITE["dist/<br/><i>landing page assets</i>"]
-        DIST_COMP["dist/components/layershift.js<br/><i>single self-contained file</i><br/><i>Pure WebGL 2 renderer</i><br/><i>Worker inlined as blob URL</i>"]
+        DIST_COMP["dist/components/layershift.js<br/><i>single self-contained file</i><br/><i>Pure WebGL 2 renderer</i>"]
     end
 
     SRC_SITE --> BUILD_SITE --> DIST_SITE
     SRC_COMP --> BUILD_COMP --> DIST_COMP
-    WORKER_SRC -->|inlined| BUILD_COMP
 
     subgraph "npm run package"
         PACKAGE["package-output.ts"]

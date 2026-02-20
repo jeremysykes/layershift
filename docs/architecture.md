@@ -37,12 +37,11 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 
 | File | Scope | Purpose |
 |------|-------|---------|
-| `parallax-renderer.ts` | Parallax | WebGL 2 renderer, GLSL shaders, render loops |
+| `parallax-renderer.ts` | Parallax | WebGL 2 renderer, GLSL shaders, render loops, GPU bilateral filter pass |
 | `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects) |
 | `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
-| `depth-worker.ts` | Shared | Web Worker for bilateral filter + interpolation |
-| `precomputed-depth.ts` | Shared | Binary depth loading, parsing, interpolation |
+| `precomputed-depth.ts` | Shared | Binary depth loading, parsing, keyframe interpolation |
 | `input-handler.ts` | Shared | Mouse/gyro input with smoothing |
 | `video-source.ts` | Shared | Video element creation + frame extraction |
 | `config.ts` | Demo | Demo app configuration |
@@ -80,8 +79,8 @@ See [parallax initialization diagram](./diagrams/parallax-initialization.md) for
 2. **Depth analysis** (sync, <5ms): histogram, percentiles, bimodality scoring
 3. **Parameter derivation** (sync, O(1)): continuous functions mapping depth statistics to shader parameters
 4. **Config merge**: explicit > derived > calibrated defaults
-5. **Depth interpolator**: Web Worker preferred, main-thread fallback
-6. **Renderer setup**: WebGL 2 program, textures, uniforms set once
+5. **Depth interpolator**: synchronous keyframe interpolation on main thread
+6. **Renderer setup**: WebGL 2 program, textures, bilateral filter FBO, uniforms set once
 7. **Render loop start**: RAF + RVFC registration
 
 ### Render Loop
@@ -97,7 +96,7 @@ Two decoupled loops:
 | Uniform | Source | Updated |
 |---------|--------|---------|
 | uImage | Video texture (WebGL 2) | Per RAF frame |
-| uDepth | Depth texture (R8) | Per depth frame (~5fps) |
+| uDepth | Filtered depth texture (R8, GPU bilateral filter) | Per depth frame (~5fps) |
 | uOffset | InputHandler | Per RAF frame |
 | uStrength | Config | Once at init |
 | uPomEnabled | Config | Once at init |
@@ -129,7 +128,7 @@ See [depth parameter derivation diagram](./diagrams/depth-parameter-derivation.m
 See [portal initialization diagram](./diagrams/portal-initialization.md) for the full sequence diagram.
 
 1. **Asset loading** (parallel): video element + binary depth data + SVG mesh generation
-2. **Depth interpolator**: Web Worker preferred, main-thread fallback
+2. **Depth interpolator**: synchronous keyframe interpolation on main thread
 3. **Renderer setup**: WebGL 2 context (stencil: true), 8 shader programs, logo mesh VBO+IBO, edge mesh VBO, chamfer mesh VBO, FBO with MRT, JFA distance field textures
 4. **Render loop start**: RAF + RVFC registration
 
@@ -261,7 +260,7 @@ The depth system is shared infrastructure — not specific to the parallax effec
 
 ### Runtime Interpolation
 
-`DepthFrameInterpolator` / `WorkerDepthInterpolator` provide smooth depth sampling at any playback time. Bilateral filter runs in a Web Worker to keep the main thread free.
+`DepthFrameInterpolator` provides synchronous keyframe interpolation at any playback time, returning raw Uint8 depth data. Bilateral filtering is performed as a GPU shader pass in the renderer (see [ADR-009](./adr/ADR-009-gpu-bilateral-filter.md)).
 
 ## Build System
 
@@ -271,7 +270,7 @@ See [build system diagram](./diagrams/build-system.md) for the build flow diagra
 |---------|--------|-------------|
 | `npm run dev` | Dev server :5173 | Vite dev server with HMR |
 | `npm run build` | `dist/` | Landing page build (TypeScript + Vite) |
-| `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle (Worker inlined) |
+| `npm run build:component` | `dist/components/layershift.js` | Self-contained IIFE bundle |
 | `npm run precompute` | depth-data.bin + depth-meta.json | Generate depth maps from video |
 | `npm run package` | `output/` | Bundle component + video + depth for deployment |
 | `npm run build:storybook` | `dist/storybook/` | Storybook static build |
@@ -290,7 +289,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | Init depth analysis | <5ms | N/A |
 | SVG mesh generation | N/A | <10ms |
 | JFA distance field (on resize) | N/A | ~0.5ms (~13 draw calls, half-res) |
-| Bilateral filter per depth frame | 5-15ms (in Worker) | 5-15ms (in Worker) |
+| Bilateral filter per depth frame | <1ms (GPU shader pass) | <1ms (GPU shader pass) |
 | Render draw calls per frame | 1 | ~6 (interior FBO, stencil, composite, chamfer, boundary) |
 | Depth texture upload frequency | ~5fps (keyframe rate) | ~5fps (keyframe rate) |
 | Depth texture size | 512x512 Uint8 (~256KB) | 512x512 Uint8 (~256KB) |
@@ -324,6 +323,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-006](./adr/ADR-006-portal-v4-emissive-chamfer-nesting.md) | Portal v4: emissive interior, geometric chamfer, nesting-based hole detection |
 | [ADR-007](./adr/ADR-007-vitepress-documentation-wiki.md) | VitePress documentation wiki integration |
 | [ADR-008](./adr/ADR-008-storybook-atomic-design-components.md) | Storybook integration with atomic design component structure |
+| [ADR-009](./adr/ADR-009-gpu-bilateral-filter.md) | GPU bilateral filter, Worker removal |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |

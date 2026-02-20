@@ -25,7 +25,6 @@ import { ParallaxRenderer } from './parallax-renderer';
 import {
   type BinaryDownloadProgress,
   DepthFrameInterpolator,
-  WorkerDepthInterpolator,
   loadPrecomputedDepth,
 } from './precomputed-depth';
 import { UIController } from './ui';
@@ -98,27 +97,11 @@ async function bootstrap(): Promise<void> {
     dofStrength: derivedParams.dofStrength,
   });
 
-  // Create depth interpolator — try Web Worker first for smooth playback
-  // (bilateral filter off main thread), fall back to synchronous if
-  // Workers aren't available (e.g. file:// protocol, strict CSP).
-  let readDepth: (timeSec: number) => Uint8Array;
-  let workerInterpolator: WorkerDepthInterpolator | null = null;
-  try {
-    workerInterpolator = await WorkerDepthInterpolator.create(
-      depthData,
-      depthData.meta.width,
-      depthData.meta.height
-    );
-    readDepth = (timeSec: number) => workerInterpolator!.sample(timeSec);
-  } catch {
-    // Worker unavailable — fall back to main-thread processing
-    const syncInterpolator = new DepthFrameInterpolator(
-      depthData,
-      depthData.meta.width,
-      depthData.meta.height
-    );
-    readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
-  }
+  // Create depth interpolator — synchronous keyframe blending.
+  // The bilateral filter now runs on the GPU as a dedicated shader pass
+  // inside the renderer, so no Web Worker is needed.
+  const interpolator = new DepthFrameInterpolator(depthData);
+  const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
   // Initialize the renderer with the video element (for video texture)
   // and the depth map dimensions (for the depth texture).
@@ -142,7 +125,6 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('beforeunload', () => {
     renderer?.dispose();
     input.dispose();
-    workerInterpolator?.dispose();
     video.remove();
   });
 }

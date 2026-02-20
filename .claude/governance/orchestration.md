@@ -53,7 +53,7 @@ The **senior-product-designer** decides *what* the UI should look like and *why*
 
 ### GPU Pipeline vs Web Components (Clear Boundary)
 
-- **GPU/shader engineer** owns: everything inside `parallax-renderer.ts`, `portal-renderer.ts`, `shape-generator.ts`, `depth-analysis.ts`, `depth-worker.ts`, `precomputed-depth.ts`. All GLSL code. All WebGL state management. Texture upload timing. Render loop architecture.
+- **GPU/shader engineer** owns: everything inside `parallax-renderer.ts`, `portal-renderer.ts`, `shape-generator.ts`, `depth-analysis.ts`, `precomputed-depth.ts`. All GLSL code. All WebGL state management. Texture upload timing. Render loop architecture.
 - **UI engineer** owns: `src/site/` (the React landing page). The `LayershiftEffect.tsx` bridge component.
 - **Web Component lifecycle** (files in `src/components/layershift/`): The GPU/shader engineer owns the rendering internals. The UI engineer owns the attribute API surface and consumer-facing behavior. Both must coordinate on changes to the component interface.
 

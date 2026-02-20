@@ -18,8 +18,7 @@ src/parallax-renderer.ts           — Parallax WebGL 2 pipeline, GLSL shaders, 
 src/portal-renderer.ts             — Portal multi-pass stencil + FBO compositing
 src/shape-generator.ts             — SVG parsing, Bezier flattening, earcut triangulation
 src/depth-analysis.ts              — Depth profiling, parameter derivation
-src/depth-worker.ts                — Bilateral filter Web Worker
-src/precomputed-depth.ts           — Binary depth loading, frame interpolation
+src/precomputed-depth.ts           — Binary depth loading, keyframe interpolation
 src/input-handler.ts               — Mouse/gyro input with exponential smoothing
 src/video-source.ts                — Video element creation, frame extraction
 scripts/precompute-depth.ts        — Offline depth map generation
@@ -67,8 +66,8 @@ You own the rendering lifecycle inside these components. The UI engineer owns th
 
 - **Analysis** (`depth-analysis.ts`): Histogram, percentiles, bimodality scoring -> `DepthProfile`
 - **Derivation** (`depth-analysis.ts`): Profile -> `DerivedParallaxParams` via continuous bounded functions
-- **Worker** (`depth-worker.ts`): Bilateral filter + bilinear resize, double-buffered
-- **Loader** (`precomputed-depth.ts`): Binary format parsing, frame interpolation, Worker/sync variants
+- **GPU filter** (`parallax-renderer.ts`): Bilateral filter shader pass, renders raw depth into filtered depth texture via FBO
+- **Loader** (`precomputed-depth.ts`): Binary format parsing, synchronous keyframe interpolation
 
 ## Inviolable Rules
 
@@ -87,7 +86,7 @@ You own the rendering lifecycle inside these components. The UI engineer owns th
 - Parallax: 1 draw call per frame, <1ms GPU time on integrated graphics
 - Portal: 6 draw calls per frame, <3ms GPU time on discrete GPU
 - Depth texture upload: ~5fps (keyframe rate), decoupled from render loop
-- Bilateral filter: 5-15ms (hidden in Worker, never blocks main thread)
+- Bilateral filter: <1ms (GPU shader pass, runs only when depth changes at ~5fps)
 - Init depth analysis: <5ms total
 - Shape triangulation: <10ms for typical SVG logos
 

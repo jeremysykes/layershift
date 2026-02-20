@@ -16,9 +16,7 @@
  */
 
 import {
-  type PrecomputedDepthData,
   DepthFrameInterpolator,
-  WorkerDepthInterpolator,
   loadPrecomputedDepth,
 } from '../../precomputed-depth';
 import { PortalRenderer, type PortalRendererConfig } from '../../portal-renderer';
@@ -258,7 +256,6 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
   private container: HTMLDivElement | null = null;
   private renderer: PortalRenderer | null = null;
   private inputHandler: ComponentInputHandler | null = null;
-  private depthWorker: WorkerDepthInterpolator | null = null;
   private video: HTMLVideoElement | null = null;
   private mesh: ShapeMesh | null = null;
   private loopCount = 0;
@@ -468,32 +465,10 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
       // Compute parallax strength from parallax-max attribute
       const parallaxStrength = this.parallaxMax / Math.max(video.videoWidth, 1);
 
-      // Create depth interpolator
-      let readDepth: (timeSec: number) => Uint8Array;
-      try {
-        const workerInterpolator = await WorkerDepthInterpolator.create(
-          depthData,
-          depthData.meta.width,
-          depthData.meta.height
-        );
-        this.depthWorker = workerInterpolator;
-        readDepth = (timeSec: number) => workerInterpolator.sample(timeSec);
-      } catch {
-        const syncInterpolator = new DepthFrameInterpolator(
-          depthData,
-          depthData.meta.width,
-          depthData.meta.height
-        );
-        readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
-      }
-
-      // Check if cancelled during worker init
-      if (signal.aborted) {
-        video.remove();
-        this.depthWorker?.dispose();
-        this.depthWorker = null;
-        return;
-      }
+      // Create depth interpolator — synchronous keyframe blending.
+      // The bilateral filter runs on the GPU as a dedicated shader pass.
+      const interpolator = new DepthFrameInterpolator(depthData);
+      const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
       // Create renderer
       const config: PortalRendererConfig = {
@@ -643,9 +618,6 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
-
-    this.depthWorker?.dispose();
-    this.depthWorker = null;
 
     if (this.video) {
       this.video.pause();
