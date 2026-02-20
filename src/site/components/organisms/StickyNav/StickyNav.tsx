@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Github } from 'lucide-react';
+import { Github, BookOpen, Layers } from 'lucide-react';
 import { EffectSelector } from '../../molecules/EffectSelector';
 import { DOCS_URL, STORYBOOK_URL } from '../../../lib/nav';
 
@@ -35,14 +35,14 @@ export function StickyNav() {
         transform: visible ? 'translateY(0)' : 'translateY(-100%)',
       }}
     >
-      <div className="max-w-[720px] mx-auto h-full flex items-center justify-between px-6">
+      <div className="max-w-[720px] mx-auto h-full flex items-center justify-between px-4 sm:px-6">
         <a
           href="#"
           onClick={(e) => {
             e.preventDefault();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="text-sm font-semibold hover:opacity-80 transition-opacity"
+          className="text-sm font-semibold hover:opacity-80 transition-opacity shrink-0"
           style={{ letterSpacing: '-0.02em', color: '#fff' }}
         >
           layershift<span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>.io</span>
@@ -50,30 +50,50 @@ export function StickyNav() {
 
         <EffectSelector compact />
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
+          {/* Text links: visible at sm+ */}
           <a
             href={DOCS_URL}
-            className="text-xs hover:text-white transition-colors"
+            className="hidden sm:inline-block text-xs hover:text-white transition-colors"
             style={{ color: '#777' }}
           >
             Docs
           </a>
           <a
             href={STORYBOOK_URL}
-            className="text-xs hover:text-white transition-colors"
+            className="hidden sm:inline-block text-xs hover:text-white transition-colors"
             style={{ color: '#777' }}
           >
             Components
           </a>
+
+          {/* Icon links: visible on mobile only */}
+          <a
+            href={DOCS_URL}
+            aria-label="Documentation"
+            className="sm:hidden inline-flex items-center justify-center hover:text-white transition-colors"
+            style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
+          >
+            <BookOpen className="w-[18px] h-[18px]" />
+          </a>
+          <a
+            href={STORYBOOK_URL}
+            aria-label="Component library"
+            className="sm:hidden inline-flex items-center justify-center hover:text-white transition-colors"
+            style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
+          >
+            <Layers className="w-[18px] h-[18px]" />
+          </a>
+
           <a
             href="https://github.com/jeremysykes/layershift"
-          target="_blank"
-          rel="noopener"
-          aria-label="GitHub"
-          className="inline-flex items-center justify-center hover:text-white transition-colors"
-          style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
-        >
-          <Github className="w-[18px] h-[18px]" />
+            target="_blank"
+            rel="noopener"
+            aria-label="GitHub"
+            className="inline-flex items-center justify-center hover:text-white transition-colors"
+            style={{ color: '#777', minWidth: '44px', minHeight: '44px' }}
+          >
+            <Github className="w-[18px] h-[18px]" />
           </a>
         </div>
       </div>

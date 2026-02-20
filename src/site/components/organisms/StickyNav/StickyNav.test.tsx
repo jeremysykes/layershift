@@ -28,11 +28,13 @@ describe('StickyNav', () => {
     expect(screen.getByText(/layershift/)).toBeInTheDocument();
   });
 
-  it('contains a Docs link', () => {
+  it('contains Docs links (text and icon variants)', () => {
     render(<StickyNav />);
-    const docsLink = screen.getByRole('link', { name: /docs/i });
-    expect(docsLink).toBeInTheDocument();
-    expect(docsLink).toHaveAttribute('href', DOCS_URL);
+    const docsLinks = screen.getAllByRole('link', { name: /doc/i });
+    expect(docsLinks.length).toBe(2);
+    docsLinks.forEach((link) => {
+      expect(link).toHaveAttribute('href', DOCS_URL);
+    });
   });
 
   it('contains a GitHub link', () => {
