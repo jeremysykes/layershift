@@ -254,7 +254,6 @@ The composite pass uses a single program with two draw calls (different stencil 
 | Draw calls / frame | 3 | 6-7 |
 | Video elements | 1 | 2 |
 | Depth interpolators | 1 | 2 |
-| Web Workers | 1 | 2 |
 
 The second video+depth pair is the main cost. But we already handle video decoding + depth interpolation — it's the same infrastructure instantiated twice.
 
@@ -354,7 +353,6 @@ This controls how "deep" the portal feels. A telephoto portal creates a long tun
 |------|-----|
 | `src/shape-generator.ts` | SVG mesh pipeline is unchanged |
 | `src/precomputed-depth.ts` | Second scene uses the same depth system |
-| `src/depth-worker.ts` | Second worker instance, same code |
 | `src/input-handler.ts` | Shared input drives both scenes |
 | `src/video-source.ts` | Second video element, same creation |
 | `src/parallax-renderer.ts` | Untouched (background scene shader logic is copied/adapted, not imported) |

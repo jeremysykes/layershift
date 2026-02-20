@@ -39,7 +39,6 @@ Post-implementation audit verifying that all engineering constraints are satisfi
 | `src/main.ts` | Modified | Modified | Yes |
 | `src/components/layershift/layershift-element.ts` | Modified | Modified | Yes |
 | `src/components/layershift/types.ts` | Modified | Modified | Yes |
-| `depth-worker.ts` | Not modified | Not modified | Yes |
 | `precomputed-depth.ts` | Not modified | Not modified | Yes |
 | `input-handler.ts` | Not modified | Not modified | Yes |
 | `video-source.ts` | Not modified | Not modified | Yes |

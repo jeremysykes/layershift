@@ -14,9 +14,7 @@
  */
 
 import {
-  type PrecomputedDepthData,
   DepthFrameInterpolator,
-  WorkerDepthInterpolator,
   loadPrecomputedDepth,
 } from '../../precomputed-depth';
 import { analyzeDepthFrames, deriveParallaxParams } from '../../depth-analysis';
@@ -211,7 +209,6 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
   private container: HTMLDivElement | null = null;
   private renderer: ParallaxRenderer | null = null;
   private inputHandler: ComponentInputHandler | null = null;
-  private depthWorker: WorkerDepthInterpolator | null = null;
   private video: HTMLVideoElement | null = null;
   private loopCount = 0;
   private readonly lifecycle: LifecycleManager;
@@ -387,34 +384,11 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         ? this.overscan
         : derivedParams.overscanPadding;
 
-      // Create depth interpolator — try Web Worker first for smooth playback,
-      // fall back to synchronous if Workers aren't available (e.g. file:// or CSP).
-      let readDepth: (timeSec: number) => Uint8Array;
-      try {
-        const workerInterpolator = await WorkerDepthInterpolator.create(
-          depthData,
-          depthData.meta.width,
-          depthData.meta.height
-        );
-        this.depthWorker = workerInterpolator;
-        readDepth = (timeSec: number) => workerInterpolator.sample(timeSec);
-      } catch {
-        // Worker unavailable — fall back to main-thread processing
-        const syncInterpolator = new DepthFrameInterpolator(
-          depthData,
-          depthData.meta.width,
-          depthData.meta.height
-        );
-        readDepth = (timeSec: number) => syncInterpolator.sample(timeSec);
-      }
-
-      // Check if cancelled during worker init
-      if (signal.aborted) {
-        video.remove();
-        this.depthWorker?.dispose();
-        this.depthWorker = null;
-        return;
-      }
+      // Create depth interpolator — synchronous keyframe blending.
+      // The bilateral filter now runs on the GPU as a dedicated shader
+      // pass inside the renderer, so no Web Worker is needed.
+      const interpolator = new DepthFrameInterpolator(depthData);
+      const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
       // Create renderer with merged config: explicit overrides > derived > defaults.
       this.renderer = new ParallaxRenderer(this.container!, {
@@ -537,9 +511,6 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
-
-    this.depthWorker?.dispose();
-    this.depthWorker = null;
 
     if (this.video) {
       this.video.pause();

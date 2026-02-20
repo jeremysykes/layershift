@@ -29,7 +29,7 @@ The depth analysis module is a leaf node in the dependency graph. It imports one
 | `src/components/layershift/layershift-element.ts` | Import analysis. hasAttribute() override detection. Pass derived params. |
 | `src/components/layershift/types.ts` | Added optional depthProfile/derivedParams to LayershiftReadyDetail. |
 
-**Not modified:** `depth-worker.ts`, `precomputed-depth.ts`, `input-handler.ts`, `video-source.ts`, `ui.ts`, `config.ts`, `site/main.ts`.
+**Not modified:** `precomputed-depth.ts`, `input-handler.ts`, `video-source.ts`, `ui.ts`, `config.ts`, `site/main.ts`.
 
 ## Performance Guarantees
 
@@ -40,7 +40,7 @@ The depth analysis module is a leaf node in the dependency graph. It imports one
 | Shader cost | Identical. Literal-to-uniform replacement is cost-neutral. pomSteps constant at 16. |
 | Overscan increase | Max 0.10 (vs current 0.08). +2.5% plane area. Negligible. |
 | Init latency | <5ms added (histogram on ~1.3M pixels). |
-| Worker changes | None. |
+| Depth system changes | None. |
 | Input system changes | None. |
 
 ## Failure Handling

@@ -8,7 +8,6 @@ sequenceDiagram
     participant Video as Video Source
     participant Depth as Depth Loader
     participant SVG as Shape Generator
-    participant Worker as Depth Worker
     participant Renderer as Portal Renderer
 
     App->>+Video: createVideoElement(src)
@@ -23,10 +22,7 @@ sequenceDiagram
 
     Note over SVG: Nesting-based hole detection:<br/>classifyContoursByNesting() uses<br/>geometric containment depth,<br/>not winding direction
 
-    App->>+Worker: WorkerDepthInterpolator.create(depthData)
-    Worker-->>-App: interpolator ready
-
-    Note over App,Worker: Falls back to sync DepthFrameInterpolator<br/>if Worker unavailable
+    App->>App: create DepthFrameInterpolator(depthData)
 
     App->>+Renderer: new PortalRenderer(config)
     App->>Renderer: initialize(video, w, h, mesh)

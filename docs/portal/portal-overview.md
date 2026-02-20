@@ -223,8 +223,7 @@ Complex SVGs with multiple paths, compound paths, nested groups, and holes (e.g.
 ## Shared Infrastructure
 
 The portal effect reuses the following shared modules without modification:
-- `precomputed-depth.ts` — binary depth loading + interpolation
-- `depth-worker.ts` — off-thread bilateral filtering
+- `precomputed-depth.ts` — binary depth loading + keyframe interpolation
 - `video-source.ts` — video element creation
 - Input handling pattern (mouse/touch/gyro with priority)
 

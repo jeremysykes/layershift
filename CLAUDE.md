@@ -75,8 +75,7 @@ src/
       index.ts              Root barrel re-exporting all components
   parallax-renderer.ts      Parallax effect GPU pipeline
   depth-analysis.ts         Parallax depth-adaptive parameter derivation
-  depth-worker.ts           Worker for bilateral filter
-  precomputed-depth.ts      Binary depth loading + interpolation
+  precomputed-depth.ts      Binary depth loading + keyframe interpolation
   input-handler.ts          Mouse/gyro input (shared)
   config.ts                 Demo app config
   main.ts                   Demo app entry point

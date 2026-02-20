@@ -9,7 +9,7 @@ graph TD
     subgraph "Layershift Library"
         direction TB
         CORE["Core Infrastructure<br/><i>input, video, UI, build</i>"]
-        DEPTH["Shared Depth System<br/><i>precomputed-depth, depth-worker</i>"]
+        DEPTH["Shared Depth System<br/><i>precomputed-depth</i>"]
 
         subgraph "Effects"
             PARALLAX["Parallax Effect<br/><code>&lt;layershift-parallax&gt;</code>"]
@@ -60,7 +60,6 @@ graph TD
     PR["parallax-renderer.ts<br/><i>GPU pipeline</i>"]
     PTR["portal-renderer.ts<br/><i>stencil pipeline</i>"]
     SG["shape-generator.ts<br/><i>SVG → GPU mesh</i>"]
-    DW["depth-worker.ts<br/><i>bilateral filter worker</i>"]
     IH["input-handler.ts<br/><i>mouse / gyro</i>"]
     VS["video-source.ts<br/><i>video element</i>"]
     UI["ui.ts<br/><i>loading overlay</i>"]
@@ -82,13 +81,10 @@ graph TD
     PORTAL_EL --> PTR
     PORTAL_EL --> SG
 
-    PD --> DW
-
     SITE --> ELEMENT
     SITE --> PORTAL_EL
 
     style DA fill:#e1f5fe
-    style DW fill:#fff3e0
     style PR fill:#f3e5f5
     style PTR fill:#f3e5f5
     style SG fill:#e8f5e9

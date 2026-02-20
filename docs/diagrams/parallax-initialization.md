@@ -8,7 +8,6 @@ sequenceDiagram
     participant Video as Video Source
     participant Depth as Depth Loader
     participant Analysis as Depth Analysis
-    participant Worker as Depth Worker
     participant Renderer as Parallax Renderer
 
     App->>+Video: createHiddenVideoElement(src)
@@ -29,14 +28,11 @@ sequenceDiagram
 
     App->>App: merge config (explicit > derived > defaults)
 
-    App->>+Worker: WorkerDepthInterpolator.create(depthData)
-    Worker-->>-App: interpolator ready
-
-    Note over App,Worker: Falls back to sync DepthFrameInterpolator<br/>if Worker unavailable
+    App->>App: create DepthFrameInterpolator(depthData)
 
     App->>+Renderer: new ParallaxRenderer(mergedConfig)
     App->>Renderer: initialize(video, w, h)
-    Note right of Renderer: Creates WebGL 2 program, video texture,<br/>depth texture (R8), sets all uniforms once
+    Note right of Renderer: Creates WebGL 2 program, video texture,<br/>raw depth texture, bilateral filter FBO,<br/>filtered depth texture (R8), sets all uniforms once
     App->>Renderer: start(video, readDepth, readInput)
     Note right of Renderer: Registers RAF + RVFC loops
     Renderer-->>-App: rendering
