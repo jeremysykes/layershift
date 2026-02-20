@@ -32,6 +32,7 @@
 
 import type { ParallaxInput } from './input-handler';
 import type { ShapeMesh } from './shape-generator';
+import { compileShader, linkProgram } from './webgl-utils';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders
@@ -685,44 +686,7 @@ export interface PortalRendererConfig {
   lightDirection: [number, number, number];
 }
 
-// ---------------------------------------------------------------------------
-// WebGL helpers
-// ---------------------------------------------------------------------------
-
-function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
-  const shader = gl.createShader(type);
-  if (!shader) throw new Error('Failed to create shader.');
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(shader) ?? '';
-    gl.deleteShader(shader);
-    throw new Error(`Shader compilation failed:\n${log}`);
-  }
-  return shader;
-}
-
-function linkProgram(
-  gl: WebGL2RenderingContext,
-  vertShader: WebGLShader,
-  fragShader: WebGLShader
-): WebGLProgram {
-  const program = gl.createProgram();
-  if (!program) throw new Error('Failed to create program.');
-  gl.attachShader(program, vertShader);
-  gl.attachShader(program, fragShader);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const log = gl.getProgramInfoLog(program) ?? '';
-    gl.deleteProgram(program);
-    throw new Error(`Program linking failed:\n${log}`);
-  }
-  gl.detachShader(program, vertShader);
-  gl.detachShader(program, fragShader);
-  gl.deleteShader(vertShader);
-  gl.deleteShader(fragShader);
-  return program;
-}
+// WebGL helpers (compileShader, linkProgram) imported from webgl-utils.ts
 
 // ---------------------------------------------------------------------------
 // Edge mesh generation

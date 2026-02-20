@@ -7,31 +7,23 @@
  * and current mouse/gyro input, creating a continuous parallax effect
  * with no discrete layer banding.
  *
- * ## Rendering pipeline (per frame)
+ * ## Multi-pass architecture
  *
- * 1. The video element's current frame is uploaded to the GPU via
- *    `gl.texImage2D`, providing the color frame at native resolution.
+ * The renderer uses a pass-based pipeline where each render pass is a
+ * self-contained unit with its own shader program and uniform cache,
+ * sharing a single fullscreen quad VAO and depth textures:
  *
- * 2. The depth interpolator produces a raw Uint8Array for the current
- *    playback time (interpolated between precomputed 5fps keyframes).
- *    This is uploaded to a single-channel R8 "raw depth" texture.
+ * 1. **Bilateral filter pass** — edge-preserving depth smoothing.
+ *    Reads raw depth (UNIT 2), writes filtered depth (UNIT 1) via FBO.
+ *    Runs at RVFC rate (~5fps, only when depth data changes).
  *
- * 3. A bilateral filter shader pass runs on the raw depth texture,
- *    rendering edge-preserving smoothed depth into a second R8 texture
- *    via a framebuffer. This runs only when depth data changes (~5fps),
- *    not on every display frame.
+ * 2. **Parallax pass** — per-pixel depth-based displacement.
+ *    Reads video (UNIT 0) + filtered depth (UNIT 1), renders to screen.
+ *    Runs at RAF rate (60-120fps).
  *
- * 4. The InputHandler provides a smoothed {x, y} offset in [-1, 1].
- *    This is passed to the shader as the uOffset uniform.
- *
- * 5. The parallax fragment shader samples the filtered depth map at
- *    each pixel's UV, computes a UV displacement proportional to
- *    (1 - depth) * strength, and samples the video texture at the
- *    displaced coordinates.
- *
- * 6. When POM is enabled, the shader ray-marches through the depth
- *    field to find the correct surface intersection, producing
- *    self-occlusion (near objects cover far objects behind them).
+ * Each pass is created by a factory function and conforms to a minimal
+ * interface. Adding a new post-processing pass requires only a new
+ * factory function and wiring it into the render loop.
  *
  * ## Texture memory
  *
@@ -41,6 +33,12 @@
  */
 
 import type { ParallaxInput } from './input-handler';
+import {
+  compileShader,
+  linkProgram,
+  getUniformLocations,
+  createFullscreenQuadVao,
+} from './webgl-utils';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders (GLSL 300 es for WebGL 2)
@@ -49,9 +47,8 @@ import type { ParallaxInput } from './input-handler';
 /**
  * Vertex shader — trivial pass-through for fullscreen quad.
  *
- * Used by both the bilateral filter pass and the parallax pass.
- * Maps clip-space [-1,1] to UV [0,1]. The parallax pass applies
- * cover-fit transform via uniforms; the filter pass uses identity.
+ * Used by the parallax pass. Maps clip-space [-1,1] to UV [0,1]
+ * and applies a cover-fit transform via uniforms.
  */
 const VERTEX_SHADER = /* glsl */ `#version 300 es
   in vec2 aPosition;
@@ -394,100 +391,231 @@ const SHADER_PARAM_DEFAULTS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// WebGL helpers
+// Render pass interfaces
 // ---------------------------------------------------------------------------
 
-/** Compile a GLSL shader, throwing on error. */
-function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
-  const shader = gl.createShader(type);
-  if (!shader) throw new Error('Failed to create shader.');
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(shader) ?? '';
-    gl.deleteShader(shader);
-    throw new Error(`Shader compilation failed:\n${log}`);
-  }
-  return shader;
+/** Bilateral filter pass — edge-preserving depth smoothing via FBO. */
+interface BilateralFilterPass {
+  readonly program: WebGLProgram;
+  readonly uniforms: Record<string, WebGLUniformLocation | null>;
+
+  /** Create FBO targeting filteredDepthTexture and set static uniforms. */
+  initFBO(
+    gl: WebGL2RenderingContext,
+    filteredDepthTexture: WebGLTexture,
+    depthWidth: number,
+    depthHeight: number
+  ): void;
+
+  /**
+   * Upload raw depth and run the bilateral filter shader.
+   *
+   * 1. Upload depthData to rawDepthTexture (UNIT 2).
+   * 2. Bind FBO → draw → unbind FBO.
+   * 3. Restore viewport to canvas size.
+   */
+  execute(
+    gl: WebGL2RenderingContext,
+    quadVao: WebGLVertexArrayObject,
+    rawDepthTexture: WebGLTexture,
+    depthData: Uint8Array,
+    depthWidth: number,
+    depthHeight: number,
+    canvasWidth: number,
+    canvasHeight: number
+  ): void;
+
+  /** Release program and FBO. */
+  dispose(gl: WebGL2RenderingContext): void;
 }
 
-/** Link a shader program, throwing on error. */
-function linkProgram(
-  gl: WebGL2RenderingContext,
-  vertShader: WebGLShader,
-  fragShader: WebGLShader
-): WebGLProgram {
-  const program = gl.createProgram();
-  if (!program) throw new Error('Failed to create program.');
-  gl.attachShader(program, vertShader);
-  gl.attachShader(program, fragShader);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const log = gl.getProgramInfoLog(program) ?? '';
-    gl.deleteProgram(program);
-    throw new Error(`Program linking failed:\n${log}`);
-  }
-  // Shaders can be detached after linking — the program retains the compiled code.
-  gl.detachShader(program, vertShader);
-  gl.detachShader(program, fragShader);
-  gl.deleteShader(vertShader);
-  gl.deleteShader(fragShader);
-  return program;
+/** Parallax rendering pass — depth-based displacement to screen. */
+interface ParallaxRenderPass {
+  readonly program: WebGLProgram;
+  readonly uniforms: Record<string, WebGLUniformLocation | null>;
+
+  /** Set static uniforms (strength, POM, contrast, DOF, texel size). */
+  setStaticUniforms(
+    gl: WebGL2RenderingContext,
+    config: ResolvedParallaxRendererConfig,
+    videoWidth: number,
+    videoHeight: number
+  ): void;
+
+  /** Update the UV transform uniforms on resize. */
+  updateUvTransform(
+    gl: WebGL2RenderingContext,
+    uvOffset: readonly number[],
+    uvScale: readonly number[]
+  ): void;
+
+  /** Release program. */
+  dispose(gl: WebGL2RenderingContext): void;
 }
 
-/**
- * Uniform location cache for the parallax shader program.
- * Avoids repeated `getUniformLocation` calls per frame.
- */
-interface UniformLocations {
-  uImage: WebGLUniformLocation | null;
-  uDepth: WebGLUniformLocation | null;
-  uOffset: WebGLUniformLocation | null;
-  uStrength: WebGLUniformLocation | null;
-  uPomEnabled: WebGLUniformLocation | null;
-  uPomSteps: WebGLUniformLocation | null;
-  uContrastLow: WebGLUniformLocation | null;
-  uContrastHigh: WebGLUniformLocation | null;
-  uVerticalReduction: WebGLUniformLocation | null;
-  uDofStart: WebGLUniformLocation | null;
-  uDofStrength: WebGLUniformLocation | null;
-  uImageTexelSize: WebGLUniformLocation | null;
-  uUvOffset: WebGLUniformLocation | null;
-  uUvScale: WebGLUniformLocation | null;
-}
+// ---------------------------------------------------------------------------
+// Bilateral filter pass factory
+// ---------------------------------------------------------------------------
 
-function getUniformLocations(gl: WebGL2RenderingContext, program: WebGLProgram): UniformLocations {
+/** Uniform names for the bilateral filter shader. */
+const BILATERAL_UNIFORM_NAMES = ['uRawDepth', 'uTexelSize'] as const;
+
+function createBilateralFilterPass(
+  gl: WebGL2RenderingContext
+): BilateralFilterPass {
+  const vertShader = compileShader(gl, gl.VERTEX_SHADER, BILATERAL_VERTEX_SHADER);
+  const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, BILATERAL_FRAGMENT_SHADER);
+  const program = linkProgram(gl, vertShader, fragShader);
+  const uniforms = getUniformLocations(gl, program, BILATERAL_UNIFORM_NAMES);
+
+  let fbo: WebGLFramebuffer | null = null;
+
   return {
-    uImage: gl.getUniformLocation(program, 'uImage'),
-    uDepth: gl.getUniformLocation(program, 'uDepth'),
-    uOffset: gl.getUniformLocation(program, 'uOffset'),
-    uStrength: gl.getUniformLocation(program, 'uStrength'),
-    uPomEnabled: gl.getUniformLocation(program, 'uPomEnabled'),
-    uPomSteps: gl.getUniformLocation(program, 'uPomSteps'),
-    uContrastLow: gl.getUniformLocation(program, 'uContrastLow'),
-    uContrastHigh: gl.getUniformLocation(program, 'uContrastHigh'),
-    uVerticalReduction: gl.getUniformLocation(program, 'uVerticalReduction'),
-    uDofStart: gl.getUniformLocation(program, 'uDofStart'),
-    uDofStrength: gl.getUniformLocation(program, 'uDofStrength'),
-    uImageTexelSize: gl.getUniformLocation(program, 'uImageTexelSize'),
-    uUvOffset: gl.getUniformLocation(program, 'uUvOffset'),
-    uUvScale: gl.getUniformLocation(program, 'uUvScale'),
+    program,
+    uniforms,
+
+    initFBO(
+      gl: WebGL2RenderingContext,
+      filteredDepthTexture: WebGLTexture,
+      depthWidth: number,
+      depthHeight: number
+    ): void {
+      // Dispose previous FBO if re-initializing.
+      if (fbo) {
+        gl.deleteFramebuffer(fbo);
+      }
+
+      fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
+        filteredDepthTexture, 0
+      );
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      // Set static uniforms for this pass.
+      gl.useProgram(program);
+      gl.uniform1i(uniforms.uRawDepth, 2);
+      gl.uniform2f(uniforms.uTexelSize, 1.0 / depthWidth, 1.0 / depthHeight);
+    },
+
+    execute(
+      gl: WebGL2RenderingContext,
+      quadVao: WebGLVertexArrayObject,
+      rawDepthTexture: WebGLTexture,
+      depthData: Uint8Array,
+      depthWidth: number,
+      depthHeight: number,
+      canvasWidth: number,
+      canvasHeight: number
+    ): void {
+      if (!fbo) return;
+
+      // 1. Upload raw depth data to the raw depth texture.
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, rawDepthTexture);
+      gl.texSubImage2D(
+        gl.TEXTURE_2D, 0,
+        0, 0,
+        depthWidth, depthHeight,
+        gl.RED, gl.UNSIGNED_BYTE,
+        depthData
+      );
+
+      // 2. Run bilateral filter: render into filteredDepthTexture via FBO.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.viewport(0, 0, depthWidth, depthHeight);
+
+      gl.useProgram(program);
+      gl.bindVertexArray(quadVao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      // 3. Restore: unbind FBO and reset viewport to canvas size.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvasWidth, canvasHeight);
+    },
+
+    dispose(gl: WebGL2RenderingContext): void {
+      if (fbo) {
+        gl.deleteFramebuffer(fbo);
+        fbo = null;
+      }
+      gl.deleteProgram(program);
+    },
   };
 }
 
-/** Uniform location cache for the bilateral filter shader program. */
-interface BilateralUniformLocations {
-  uRawDepth: WebGLUniformLocation | null;
-  uTexelSize: WebGLUniformLocation | null;
-}
+// ---------------------------------------------------------------------------
+// Parallax pass factory
+// ---------------------------------------------------------------------------
 
-function getBilateralUniformLocations(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram
-): BilateralUniformLocations {
+/** Uniform names for the parallax shader. */
+const PARALLAX_UNIFORM_NAMES = [
+  'uImage', 'uDepth', 'uOffset', 'uStrength',
+  'uPomEnabled', 'uPomSteps',
+  'uContrastLow', 'uContrastHigh', 'uVerticalReduction',
+  'uDofStart', 'uDofStrength',
+  'uImageTexelSize', 'uUvOffset', 'uUvScale',
+] as const;
+
+/** Compile-time upper bound for the POM for-loop in GLSL. */
+const MAX_POM_STEPS = 64;
+
+function createParallaxPass(
+  gl: WebGL2RenderingContext
+): ParallaxRenderPass {
+  // Inject MAX_POM_STEPS as a #define into the fragment shader.
+  const fragSource = FRAGMENT_SHADER.replace(
+    '#version 300 es',
+    `#version 300 es\n#define MAX_POM_STEPS ${MAX_POM_STEPS}`
+  );
+
+  const vertShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
+  const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, fragSource);
+  const program = linkProgram(gl, vertShader, fragShader);
+  const uniforms = getUniformLocations(gl, program, PARALLAX_UNIFORM_NAMES);
+
   return {
-    uRawDepth: gl.getUniformLocation(program, 'uRawDepth'),
-    uTexelSize: gl.getUniformLocation(program, 'uTexelSize'),
+    program,
+    uniforms,
+
+    setStaticUniforms(
+      gl: WebGL2RenderingContext,
+      config: ResolvedParallaxRendererConfig,
+      videoWidth: number,
+      videoHeight: number
+    ): void {
+      gl.useProgram(program);
+
+      // Texture unit bindings: video=0, filtered depth=1
+      gl.uniform1i(uniforms.uImage, 0);
+      gl.uniform1i(uniforms.uDepth, 1);
+
+      // Static shader parameters (set once, never updated per-frame)
+      gl.uniform1f(uniforms.uStrength, config.parallaxStrength);
+      gl.uniform1i(uniforms.uPomEnabled, config.pomEnabled ? 1 : 0);
+      gl.uniform1i(uniforms.uPomSteps, config.pomSteps);
+      gl.uniform1f(uniforms.uContrastLow, config.contrastLow);
+      gl.uniform1f(uniforms.uContrastHigh, config.contrastHigh);
+      gl.uniform1f(uniforms.uVerticalReduction, config.verticalReduction);
+      gl.uniform1f(uniforms.uDofStart, config.dofStart);
+      gl.uniform1f(uniforms.uDofStrength, config.dofStrength);
+      gl.uniform2f(uniforms.uImageTexelSize, 1.0 / videoWidth, 1.0 / videoHeight);
+    },
+
+    updateUvTransform(
+      gl: WebGL2RenderingContext,
+      uvOffset: readonly number[],
+      uvScale: readonly number[]
+    ): void {
+      gl.useProgram(program);
+      gl.uniform2f(uniforms.uUvOffset, uvOffset[0], uvOffset[1]);
+      gl.uniform2f(uniforms.uUvScale, uvScale[0], uvScale[1]);
+    },
+
+    dispose(gl: WebGL2RenderingContext): void {
+      gl.deleteProgram(program);
+    },
   };
 }
 
@@ -499,25 +627,20 @@ export class ParallaxRenderer {
   /** Debounce delay for resize events to avoid layout thrashing. */
   private static readonly RESIZE_DEBOUNCE_MS = 100;
 
-  /** Compile-time upper bound for the POM for-loop in GLSL. */
-  private static readonly MAX_POM_STEPS = 64;
-
-  // ---- WebGL objects (parallax pass) ----
+  // ---- Shared GPU resources ----
   private readonly canvas: HTMLCanvasElement;
   private gl: WebGL2RenderingContext | null = null;
-  private program: WebGLProgram | null = null;
-  private uniforms: UniformLocations | null = null;
-  private vao: WebGLVertexArrayObject | null = null;
-  private videoTexture: WebGLTexture | null = null;
+  private quadVao: WebGLVertexArrayObject | null = null;
   private readonly container: HTMLElement;
 
-  // ---- WebGL objects (bilateral filter pass) ----
-  private bilateralProgram: WebGLProgram | null = null;
-  private bilateralUniforms: BilateralUniformLocations | null = null;
-  private bilateralVao: WebGLVertexArrayObject | null = null;
+  // ---- Render passes ----
+  private bilateralPass: BilateralFilterPass | null = null;
+  private parallaxPass: ParallaxRenderPass | null = null;
+
+  // ---- Shared textures ----
+  private videoTexture: WebGLTexture | null = null;
   private rawDepthTexture: WebGLTexture | null = null;
   private filteredDepthTexture: WebGLTexture | null = null;
-  private depthFbo: WebGLFramebuffer | null = null;
 
   // ---- Depth data dimensions ----
   private depthWidth = 0;
@@ -667,41 +790,14 @@ export class ParallaxRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, depthWidth, depthHeight);
 
-    // --- Bilateral filter FBO ---
-    // Renders the bilateral filter output into filteredDepthTexture.
-    this.depthFbo = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.depthFbo);
-    gl.framebufferTexture2D(
-      gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
-      this.filteredDepthTexture, 0
-    );
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-    // --- Set bilateral filter uniforms ---
-    if (this.bilateralProgram && this.bilateralUniforms) {
-      gl.useProgram(this.bilateralProgram);
-      gl.uniform1i(this.bilateralUniforms.uRawDepth, 2);
-      gl.uniform2f(this.bilateralUniforms.uTexelSize, 1.0 / depthWidth, 1.0 / depthHeight);
+    // --- Initialize bilateral filter pass FBO + static uniforms ---
+    if (this.bilateralPass) {
+      this.bilateralPass.initFBO(gl, this.filteredDepthTexture, depthWidth, depthHeight);
     }
 
-    // --- Set parallax shader static uniforms ---
-    if (this.program && this.uniforms) {
-      gl.useProgram(this.program);
-
-      // Texture unit bindings: video=0, filtered depth=1
-      gl.uniform1i(this.uniforms.uImage, 0);
-      gl.uniform1i(this.uniforms.uDepth, 1);
-
-      // Static shader parameters (set once, never updated per-frame)
-      gl.uniform1f(this.uniforms.uStrength, this.config.parallaxStrength);
-      gl.uniform1i(this.uniforms.uPomEnabled, this.config.pomEnabled ? 1 : 0);
-      gl.uniform1i(this.uniforms.uPomSteps, this.config.pomSteps);
-      gl.uniform1f(this.uniforms.uContrastLow, this.config.contrastLow);
-      gl.uniform1f(this.uniforms.uContrastHigh, this.config.contrastHigh);
-      gl.uniform1f(this.uniforms.uVerticalReduction, this.config.verticalReduction);
-      gl.uniform1f(this.uniforms.uDofStart, this.config.dofStart);
-      gl.uniform1f(this.uniforms.uDofStrength, this.config.dofStrength);
-      gl.uniform2f(this.uniforms.uImageTexelSize, 1.0 / video.videoWidth, 1.0 / video.videoHeight);
+    // --- Set parallax pass static uniforms ---
+    if (this.parallaxPass) {
+      this.parallaxPass.setStaticUniforms(gl, this.config, video.videoWidth, video.videoHeight);
     }
 
     // Size everything to the current viewport.
@@ -796,60 +892,24 @@ export class ParallaxRenderer {
   // GPU resource initialization
   // -----------------------------------------------------------------------
 
-  /** Create shader programs, fullscreen quad VAOs, and cache uniform locations. */
+  /**
+   * Create render passes and shared fullscreen quad VAO.
+   *
+   * Each pass is a self-contained unit with its own program and uniform
+   * cache. They share a single VAO for the fullscreen quad geometry.
+   */
   private initGPUResources(): void {
     const gl = this.gl;
     if (!gl) return;
 
-    // --- Bilateral filter program ---
-    const bilateralVert = compileShader(gl, gl.VERTEX_SHADER, BILATERAL_VERTEX_SHADER);
-    const bilateralFrag = compileShader(gl, gl.FRAGMENT_SHADER, BILATERAL_FRAGMENT_SHADER);
-    this.bilateralProgram = linkProgram(gl, bilateralVert, bilateralFrag);
-    this.bilateralUniforms = getBilateralUniformLocations(gl, this.bilateralProgram);
+    // Create render passes (each compiles its own shaders).
+    this.bilateralPass = createBilateralFilterPass(gl);
+    this.parallaxPass = createParallaxPass(gl);
 
-    // Bilateral filter VAO (same fullscreen quad geometry, separate VAO).
-    const quadVertices = new Float32Array([
-      -1, -1,
-       1, -1,
-      -1,  1,
-       1,  1,
-    ]);
-
-    this.bilateralVao = gl.createVertexArray();
-    gl.bindVertexArray(this.bilateralVao);
-    const bilateralVbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, bilateralVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-    const bilateralAPos = gl.getAttribLocation(this.bilateralProgram, 'aPosition');
-    gl.enableVertexAttribArray(bilateralAPos);
-    gl.vertexAttribPointer(bilateralAPos, 2, gl.FLOAT, false, 0, 0);
-    gl.bindVertexArray(null);
-
-    // --- Parallax program ---
-    // Inject MAX_POM_STEPS as a #define into the fragment shader.
-    const fragSource = FRAGMENT_SHADER.replace(
-      '#version 300 es',
-      `#version 300 es\n#define MAX_POM_STEPS ${ParallaxRenderer.MAX_POM_STEPS}`
-    );
-
-    const vertShader = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
-    const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, fragSource);
-    this.program = linkProgram(gl, vertShader, fragShader);
-    this.uniforms = getUniformLocations(gl, this.program);
-
-    // --- Parallax fullscreen quad VAO ---
-    this.vao = gl.createVertexArray();
-    gl.bindVertexArray(this.vao);
-
-    const vbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-
-    const aPosition = gl.getAttribLocation(this.program, 'aPosition');
-    gl.enableVertexAttribArray(aPosition);
-    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
-
-    gl.bindVertexArray(null);
+    // Shared fullscreen quad VAO — used by both passes.
+    // Created from the parallax program (both programs use the same
+    // `aPosition` attribute, so the VAO is compatible).
+    this.quadVao = createFullscreenQuadVao(gl, this.parallaxPass.program);
 
     // Disable depth testing — single fullscreen quad, no depth needed.
     gl.disable(gl.DEPTH_TEST);
@@ -916,7 +976,7 @@ export class ParallaxRenderer {
 
     const gl = this.gl;
     const video = this.playbackVideo;
-    if (!gl || !this.program || !this.uniforms || !this.vao) {
+    if (!gl || !this.parallaxPass || !this.quadVao) {
       return;
     }
 
@@ -927,7 +987,7 @@ export class ParallaxRenderer {
       return;
     }
 
-    gl.useProgram(this.program);
+    gl.useProgram(this.parallaxPass.program);
 
     // Upload the current video frame to the GPU.
     // Y-flip is handled globally (UNPACK_FLIP_Y_WEBGL set once in constructor).
@@ -945,21 +1005,19 @@ export class ParallaxRenderer {
     // revealing content from the right — matching real parallax behavior.
     if (this.readInput) {
       const input = this.readInput();
-      gl.uniform2f(this.uniforms.uOffset, -input.x, input.y);
+      gl.uniform2f(this.parallaxPass.uniforms.uOffset, -input.x, input.y);
     }
 
     // Draw the fullscreen quad (reads filtered depth from TEXTURE_UNIT 1).
-    gl.bindVertexArray(this.vao);
+    gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
 
   /**
    * Upload raw depth data to the GPU and run the bilateral filter pass.
    *
-   * 1. Uploads the raw interpolated Uint8Array to rawDepthTexture (UNIT 2).
-   * 2. Binds the FBO targeting filteredDepthTexture.
-   * 3. Runs the bilateral filter shader (reads UNIT 2, writes to FBO).
-   * 4. Unbinds the FBO so subsequent draws go to the screen.
+   * Delegates to the bilateral filter pass object, which encapsulates
+   * the upload → FBO bind → draw → FBO unbind → viewport restore sequence.
    *
    * The parallax shader reads from filteredDepthTexture (UNIT 1).
    */
@@ -967,34 +1025,20 @@ export class ParallaxRenderer {
     const gl = this.gl;
     if (
       !gl || !this.readDepth ||
-      !this.rawDepthTexture || !this.filteredDepthTexture ||
-      !this.depthFbo || !this.bilateralProgram ||
-      !this.bilateralUniforms || !this.bilateralVao
+      !this.rawDepthTexture || !this.bilateralPass
     ) return;
 
-    // 1. Upload raw depth data to the raw depth texture.
     const depthData = this.readDepth(timeSec);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.rawDepthTexture);
-    gl.texSubImage2D(
-      gl.TEXTURE_2D, 0,
-      0, 0,
-      this.depthWidth, this.depthHeight,
-      gl.RED, gl.UNSIGNED_BYTE,
-      depthData
+    this.bilateralPass.execute(
+      gl,
+      this.quadVao!,
+      this.rawDepthTexture,
+      depthData,
+      this.depthWidth,
+      this.depthHeight,
+      this.canvas.width,
+      this.canvas.height
     );
-
-    // 2. Run bilateral filter: render into filteredDepthTexture via FBO.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.depthFbo);
-    gl.viewport(0, 0, this.depthWidth, this.depthHeight);
-
-    gl.useProgram(this.bilateralProgram);
-    gl.bindVertexArray(this.bilateralVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    // 3. Restore: unbind FBO and reset viewport to canvas size.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
   // -----------------------------------------------------------------------
@@ -1083,11 +1127,9 @@ export class ParallaxRenderer {
     this.uvOffset = [(1.0 - scaleU) / 2.0, (1.0 - scaleV) / 2.0];
     this.uvScale = [scaleU, scaleV];
 
-    // Update the UV transform uniforms.
-    if (this.program && this.uniforms) {
-      gl.useProgram(this.program);
-      gl.uniform2f(this.uniforms.uUvOffset, this.uvOffset[0], this.uvOffset[1]);
-      gl.uniform2f(this.uniforms.uUvScale, this.uvScale[0], this.uvScale[1]);
+    // Update the UV transform uniforms via the parallax pass.
+    if (this.parallaxPass) {
+      this.parallaxPass.updateUvTransform(gl, this.uvOffset, this.uvScale);
     }
   }
 
@@ -1136,7 +1178,7 @@ export class ParallaxRenderer {
   // Cleanup
   // -----------------------------------------------------------------------
 
-  /** Dispose textures and FBO only. */
+  /** Dispose textures only (shared resources, owned by the renderer). */
   private disposeTextures(): void {
     const gl = this.gl;
     if (!gl) return;
@@ -1153,35 +1195,26 @@ export class ParallaxRenderer {
       gl.deleteTexture(this.filteredDepthTexture);
       this.filteredDepthTexture = null;
     }
-    if (this.depthFbo) {
-      gl.deleteFramebuffer(this.depthFbo);
-      this.depthFbo = null;
-    }
   }
 
-  /** Dispose shader programs and VAOs. */
+  /** Dispose render passes and shared VAO. */
   private disposeGPUResources(): void {
     const gl = this.gl;
     if (!gl) return;
 
-    if (this.program) {
-      gl.deleteProgram(this.program);
-      this.program = null;
+    if (this.bilateralPass) {
+      this.bilateralPass.dispose(gl);
+      this.bilateralPass = null;
     }
-    if (this.vao) {
-      gl.deleteVertexArray(this.vao);
-      this.vao = null;
-    }
-    this.uniforms = null;
 
-    if (this.bilateralProgram) {
-      gl.deleteProgram(this.bilateralProgram);
-      this.bilateralProgram = null;
+    if (this.parallaxPass) {
+      this.parallaxPass.dispose(gl);
+      this.parallaxPass = null;
     }
-    if (this.bilateralVao) {
-      gl.deleteVertexArray(this.bilateralVao);
-      this.bilateralVao = null;
+
+    if (this.quadVao) {
+      gl.deleteVertexArray(this.quadVao);
+      this.quadVao = null;
     }
-    this.bilateralUniforms = null;
   }
 }
