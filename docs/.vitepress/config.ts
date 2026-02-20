@@ -84,6 +84,7 @@ export default withMermaid(
             { text: 'ADR-010: Multi-Pass Renderer', link: '/adr/ADR-010-multi-pass-renderer-architecture' },
             { text: 'ADR-011: Render Pass Framework', link: '/adr/ADR-011-shared-render-pass-framework' },
             { text: 'ADR-012: Adaptive Quality', link: '/adr/ADR-012-adaptive-quality-scaling' },
+            { text: 'ADR-013: WebGPU Renderer', link: '/adr/ADR-013-webgpu-renderer-path' },
           ],
         },
       ],

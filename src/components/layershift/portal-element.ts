@@ -20,6 +20,8 @@ import {
   loadPrecomputedDepth,
 } from '../../precomputed-depth';
 import { PortalRenderer, type PortalRendererConfig } from '../../portal-renderer';
+import { PortalRendererWebGPU } from '../../portal-renderer-webgpu';
+import { detectGPUBackend } from '../../gpu-backend';
 import { generateMeshFromSVG, type ShapeMesh } from '../../shape-generator';
 import type { ParallaxInput } from '../../input-handler';
 import type {
@@ -233,7 +235,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     return [
       'src', 'depth-src', 'depth-meta', 'logo-src',
       'parallax-x', 'parallax-y', 'parallax-max', 'overscan', 'pom-steps',
-      'quality',
+      'quality', 'gpu-backend',
       'rim-intensity', 'rim-color', 'rim-width',
       'refraction-strength', 'chromatic-strength', 'occlusion-intensity',
       'depth-power', 'depth-scale', 'depth-bias',
@@ -255,7 +257,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
 
   private shadow: ShadowRoot;
   private container: HTMLDivElement | null = null;
-  private renderer: PortalRenderer | null = null;
+  private renderer: PortalRenderer | PortalRendererWebGPU | null = null;
   private inputHandler: ComponentInputHandler | null = null;
   private video: HTMLVideoElement | null = null;
   private mesh: ShapeMesh | null = null;
@@ -308,6 +310,11 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     const val = this.getAttribute('quality');
     if (val === 'auto' || val === 'high' || val === 'medium' || val === 'low') return val;
     return undefined;
+  }
+  private get gpuBackend(): 'webgpu' | 'webgl2' | 'auto' {
+    const val = this.getAttribute('gpu-backend');
+    if (val === 'webgpu' || val === 'webgl2') return val;
+    return 'auto';
   }
   // Boundary
   private get rimIntensity(): number { return this.getAttrFloat('rim-intensity', DEFAULTS.rimIntensity); }
@@ -527,7 +534,18 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         lightDirection: this.lightDirection3,
       };
 
-      this.renderer = new PortalRenderer(this.container!, config);
+      // Detect GPU backend (WebGPU with WebGL2 fallback).
+      const backend = await detectGPUBackend(this.gpuBackend);
+
+      if (signal.aborted) return;
+
+      if (backend.type === 'webgpu' && backend.device && backend.adapter) {
+        this.renderer = new PortalRendererWebGPU(
+          this.container!, config, backend.device, backend.adapter.info,
+        );
+      } else {
+        this.renderer = new PortalRenderer(this.container!, config);
+      }
       this.renderer.initialize(video, depthData.meta.width, depthData.meta.height, mesh);
 
       // Create input handler scoped to this element

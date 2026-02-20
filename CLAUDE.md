@@ -73,10 +73,17 @@ src/
       organisms/            Complex sections (Hero, StickyNav, Footer, etc.)
       templates/            Page-level wrappers (Content, RevealSection)
       index.ts              Root barrel re-exporting all components
-  parallax-renderer.ts      Parallax effect GPU pipeline (multi-pass)
-  render-pass.ts            Render pass framework (shared)
+  renderer-base.ts          Abstract base class for renderers (shared loop, resize, depth subsample)
+  gpu-backend.ts            GPU backend feature detection (WebGPU / WebGL 2 selection)
+  parallax-renderer.ts      Parallax effect WebGL 2 renderer (multi-pass)
+  parallax-renderer-webgpu.ts  Parallax effect WebGPU renderer
+  portal-renderer-webgpu.ts    Portal effect WebGPU renderer
+  render-pass.ts            WebGL 2 render pass framework (shared)
+  render-pass-webgpu.ts     WebGPU render pass framework (shared)
   quality.ts                Adaptive quality scaling (device probing, tier classification)
   webgl-utils.ts            Shared WebGL 2 helpers (compile, link, VAO)
+  webgpu-utils.ts           Shared WebGPU helpers (pipeline, bind groups)
+  jfa-distance-field.ts     JFA distance field module (shared by portal renderers)
   depth-analysis.ts         Parallax depth-adaptive parameter derivation
   precomputed-depth.ts      Binary depth loading + keyframe interpolation
   input-handler.ts          Mouse/gyro input (shared)
@@ -84,6 +91,9 @@ src/
   main.ts                   Demo app entry point
   video-source.ts           Video utilities (shared)
   ui.ts                     Loading UI
+  shaders/
+    parallax/               GLSL (.glsl) and WGSL (.wgsl) shaders for parallax effect
+    portal/                 GLSL (.glsl) and WGSL (.wgsl) shaders for portal effect
 docs/
   architecture.md           System architecture (read first)
   adr/                      Architecture Decision Records

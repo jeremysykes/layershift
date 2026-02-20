@@ -30,601 +30,37 @@
  *    and interior depth texture.
  */
 
-import type { ParallaxInput } from './input-handler';
 import type { ShapeMesh } from './shape-generator';
-import { compileShader, linkProgram, getUniformLocations, createFullscreenQuadVao } from './webgl-utils';
+import { createFullscreenQuadVao } from './webgl-utils';
 import type { RenderPass, TextureSlot } from './render-pass';
 import { createPass, TextureRegistry } from './render-pass';
-import type { QualityTier, QualityParams } from './quality';
+import { JFADistanceField } from './jfa-distance-field';
+import type { QualityTier } from './quality';
 import { resolveQuality } from './quality';
+import { RendererBase } from './renderer-base';
 
 // ---------------------------------------------------------------------------
-// GLSL Shaders
+// GLSL Shaders (imported from external files via Vite ?raw)
 // ---------------------------------------------------------------------------
 
-/** Stencil pass — renders logo mesh to stencil buffer only. */
-const STENCIL_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  uniform vec2 uMeshScale;
-  void main() {
-    gl_Position = vec4(aPosition * uMeshScale, 0.0, 1.0);
-  }
-`;
-
-const STENCIL_FS = /* glsl */ `#version 300 es
-  precision lowp float;
-  out vec4 fragColor;
-  void main() { fragColor = vec4(0.0); }
-`;
-
-/**
- * Mask pass — renders logo mesh to a color texture as a binary mask.
- * Used as input for the JFA distance field computation.
- */
-const MASK_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  uniform vec2 uMeshScale;
-  void main() {
-    gl_Position = vec4(aPosition * uMeshScale, 0.0, 1.0);
-  }
-`;
-
-const MASK_FS = /* glsl */ `#version 300 es
-  precision lowp float;
-  out vec4 fragColor;
-  void main() { fragColor = vec4(1.0); }
-`;
-
-/**
- * JFA Seed pass — detects edges in the binary mask and writes seed coordinates.
- * Interior edge pixels write their own UV as the nearest seed.
- * Non-edge pixels write (-1, -1) as a sentinel.
- */
-const JFA_SEED_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  out vec2 vUv;
-  void main() {
-    vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-const JFA_SEED_FS = /* glsl */ `#version 300 es
-  precision highp float;
-  uniform sampler2D uMask;
-  uniform vec2 uTexelSize;
-  in vec2 vUv;
-  out vec2 fragSeed;
-
-  void main() {
-    float center = texture(uMask, vUv).r;
-    float left   = texture(uMask, vUv + vec2(-uTexelSize.x, 0.0)).r;
-    float right  = texture(uMask, vUv + vec2( uTexelSize.x, 0.0)).r;
-    float up     = texture(uMask, vUv + vec2(0.0,  uTexelSize.y)).r;
-    float down   = texture(uMask, vUv + vec2(0.0, -uTexelSize.y)).r;
-
-    bool isEdge = (step(0.5, center) != step(0.5, left)) ||
-                  (step(0.5, center) != step(0.5, right)) ||
-                  (step(0.5, center) != step(0.5, up)) ||
-                  (step(0.5, center) != step(0.5, down));
-
-    if (isEdge) {
-      fragSeed = vUv;
-    } else {
-      fragSeed = vec2(-1.0);
-    }
-  }
-`;
-
-/**
- * JFA Flood pass — one iteration of Jump Flood Algorithm.
- * Samples 8 neighbors at current step distance, keeps closest seed.
- */
-const JFA_FLOOD_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  out vec2 vUv;
-  void main() {
-    vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-const JFA_FLOOD_FS = /* glsl */ `#version 300 es
-  precision highp float;
-  uniform sampler2D uSeedTex;
-  uniform float uStepSize;
-  in vec2 vUv;
-  out vec2 fragSeed;
-
-  void main() {
-    vec2 bestSeed = texture(uSeedTex, vUv).rg;
-    float bestDist = (bestSeed.x < 0.0) ? 1.0e10 : distance(vUv, bestSeed);
-
-    for (int dy = -1; dy <= 1; dy++) {
-      for (int dx = -1; dx <= 1; dx++) {
-        if (dx == 0 && dy == 0) continue;
-        vec2 offset = vec2(float(dx), float(dy)) * uStepSize;
-        vec2 sampleUv = vUv + offset;
-        if (sampleUv.x < 0.0 || sampleUv.x > 1.0 || sampleUv.y < 0.0 || sampleUv.y > 1.0) continue;
-        vec2 neighborSeed = texture(uSeedTex, sampleUv).rg;
-        if (neighborSeed.x < 0.0) continue;
-        float d = distance(vUv, neighborSeed);
-        if (d < bestDist) {
-          bestDist = d;
-          bestSeed = neighborSeed;
-        }
-      }
-    }
-
-    fragSeed = bestSeed;
-  }
-`;
-
-/**
- * Distance conversion pass — converts JFA seed coordinates to scalar distance.
- * Output: 0.0 = at edge, 1.0 = deep interior (beyond bevel width).
- */
-const JFA_DIST_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  out vec2 vUv;
-  void main() {
-    vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-const JFA_DIST_FS = /* glsl */ `#version 300 es
-  precision highp float;
-  uniform sampler2D uSeedTex;
-  uniform sampler2D uMask;
-  uniform float uBevelWidth;
-  in vec2 vUv;
-  out vec4 fragDist;
-
-  void main() {
-    float mask = texture(uMask, vUv).r;
-    if (mask < 0.5) {
-      fragDist = vec4(0.0);
-      return;
-    }
-
-    vec2 seed = texture(uSeedTex, vUv).rg;
-    if (seed.x < 0.0) {
-      fragDist = vec4(1.0);
-      return;
-    }
-
-    float d = distance(vUv, seed);
-    float normalized = clamp(d / max(uBevelWidth, 0.001), 0.0, 1.0);
-    fragDist = vec4(normalized, 0.0, 0.0, 1.0);
-  }
-`;
-
-/**
- * Interior scene shader — renders into FBO with aggressive depth displacement.
- * POM ray-march, lens-transformed depth, DOF, volumetric fog bias, color grading.
- * Dual output: color (attachment 0) + depth value (attachment 1).
- */
-const INTERIOR_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  uniform vec2 uUvOffset;
-  uniform vec2 uUvScale;
-  out vec2 vUv;
-  out vec2 vScreenUv;
-  void main() {
-    vec2 baseUv = aPosition * 0.5 + 0.5;
-    vUv = baseUv * uUvScale + uUvOffset;
-    vScreenUv = baseUv;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-const INTERIOR_FS = /* glsl */ `#version 300 es
-  precision highp float;
-
-  #define MAX_POM_STEPS 32
-
-  uniform sampler2D uImage;
-  uniform sampler2D uDepth;
-  uniform vec2 uOffset;
-  uniform float uStrength;
-  uniform int uPomSteps;
-
-  // Lens transform: remap depth curve for exaggerated/compressed depth feel
-  uniform float uDepthPower;     // >1 = telephoto, <1 = wide-angle
-  uniform float uDepthScale;     // multiplier on depth range
-  uniform float uDepthBias;      // shift depth origin
-
-  // Depth-adaptive contrast
-  uniform float uContrastLow;
-  uniform float uContrastHigh;
-  uniform float uVerticalReduction;
-
-  // DOF
-  uniform float uDofStart;
-  uniform float uDofStrength;
-  uniform vec2 uImageTexelSize;
-
-  // Interior mood
-  uniform float uFogDensity;     // volumetric fog bias (0 = none, 0.3 = subtle)
-  uniform vec3 uFogColor;        // fog tint color
-  uniform float uColorShift;     // warm/cool grading shift
-  uniform float uBrightnessBias; // overall brightness adjustment
-
-  in vec2 vUv;
-  in vec2 vScreenUv;
-
-  layout(location = 0) out vec4 fragColor;
-  layout(location = 1) out vec4 fragDepth;
-
-  // Apply lens transform to raw depth
-  float lensDepth(float raw) {
-    float d = smoothstep(uContrastLow, uContrastHigh, raw);
-    d = pow(d, uDepthPower) * uDepthScale + uDepthBias;
-    return clamp(d, 0.0, 1.0);
-  }
-
-  float edgeFade(vec2 uv) {
-    float margin = uStrength * 1.5;
-    float fadeX = smoothstep(0.0, margin, uv.x) * smoothstep(0.0, margin, 1.0 - uv.x);
-    float fadeY = smoothstep(0.0, margin, uv.y) * smoothstep(0.0, margin, 1.0 - uv.y);
-    return fadeX * fadeY;
-  }
-
-  // POM ray-march with lens-transformed depth
-  vec2 pomDisplace(vec2 uv, out float hitDepth) {
-    float layerD = 1.0 / float(uPomSteps);
-    vec2 scaledOffset = uOffset;
-    scaledOffset.y *= uVerticalReduction;
-    vec2 deltaUV = scaledOffset * uStrength / float(uPomSteps);
-    float currentLayerDepth = 0.0;
-    vec2 currentUV = uv;
-    float fade = edgeFade(uv);
-
-    for (int i = 0; i < MAX_POM_STEPS; i++) {
-      if (i >= uPomSteps) break;
-      float raw = texture(uDepth, currentUV).r;
-      float depthAtUV = 1.0 - lensDepth(raw);
-      if (currentLayerDepth > depthAtUV) {
-        vec2 prevUV = currentUV - deltaUV;
-        float prevLayerD = currentLayerDepth - layerD;
-        float prevRaw = texture(uDepth, prevUV).r;
-        float prevDepthAtUV = 1.0 - lensDepth(prevRaw);
-        float afterD = depthAtUV - currentLayerDepth;
-        float beforeD = prevDepthAtUV - prevLayerD;
-        float t = afterD / (afterD - beforeD);
-        vec2 hitUV = mix(currentUV, prevUV, t);
-        hitDepth = mix(depthAtUV, prevDepthAtUV, t);
-        return mix(uv, hitUV, fade);
-      }
-      currentUV += deltaUV;
-      currentLayerDepth += layerD;
-    }
-    hitDepth = 1.0 - lensDepth(texture(uDepth, currentUV).r);
-    return mix(uv, currentUV, fade);
-  }
-
-  void main() {
-    float hitDepth;
-    vec2 displaced = pomDisplace(vUv, hitDepth);
-    displaced = clamp(displaced, vec2(0.0), vec2(1.0));
-
-    vec4 color = texture(uImage, displaced);
-
-    // DOF: blur far objects
-    float rawDepthAtHit = texture(uDepth, displaced).r;
-    float lensD = lensDepth(rawDepthAtHit);
-    float dof = smoothstep(uDofStart, 1.0, lensD) * uDofStrength;
-    if (dof > 0.01) {
-      vec2 ts = uImageTexelSize;
-      vec4 blurred = (
-        texture(uImage, displaced + vec2( ts.x,  0.0)) +
-        texture(uImage, displaced + vec2(-ts.x,  0.0)) +
-        texture(uImage, displaced + vec2( 0.0,  ts.y)) +
-        texture(uImage, displaced + vec2( 0.0, -ts.y)) +
-        texture(uImage, displaced + vec2( ts.x,  ts.y)) +
-        texture(uImage, displaced + vec2(-ts.x, -ts.y)) +
-        texture(uImage, displaced + vec2( ts.x, -ts.y)) +
-        texture(uImage, displaced + vec2(-ts.x,  ts.y))
-      ) * 0.125;
-      color = mix(color, blurred, dof);
-    }
-
-    // Volumetric fog bias: far objects fade into fog color
-    float fogFactor = smoothstep(0.3, 1.0, lensD) * uFogDensity;
-    color.rgb = mix(color.rgb, uFogColor, fogFactor);
-
-    // Color grading shift: warm near, cool far (or vice versa)
-    float gradeAmount = (lensD - 0.5) * uColorShift;
-    color.r += gradeAmount * 0.08;
-    color.b -= gradeAmount * 0.08;
-
-    // Brightness bias
-    color.rgb *= (1.0 + uBrightnessBias);
-
-    // Subtle vignette inside portal
-    float dist = length(vScreenUv - 0.5) * 1.4;
-    color.rgb *= 1.0 - pow(dist, 3.0) * 0.3;
-
-    fragColor = color;
-    // Write lens-transformed depth to second attachment for boundary effects
-    fragDepth = vec4(lensD, 0.0, 0.0, 1.0);
-  }
-`;
-
-/**
- * Composite shader with bevel lighting — samples interior FBO and distance field.
- * Applies directional bevel lighting, edge occlusion, depth-modulated darkening,
- * and desaturation to create perceived glyph thickness.
- */
-const COMPOSITE_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  out vec2 vUv;
-  void main() {
-    vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-const COMPOSITE_FS = /* glsl */ `#version 300 es
-  precision highp float;
-  uniform sampler2D uInteriorColor;
-  uniform sampler2D uDistField;
-  uniform float uEdgeOcclusionWidth;    // how far edge darkening extends
-  uniform float uEdgeOcclusionStrength; // how strong (0=none, 1=full black)
-
-  in vec2 vUv;
-  out vec4 fragColor;
-
-  // sRGB ↔ linear conversions for correct lighting math
-  vec3 toLinear(vec3 s) {
-    return mix(s / 12.92, pow((s + 0.055) / 1.055, vec3(2.4)), step(0.04045, s));
-  }
-  vec3 toSRGB(vec3 l) {
-    return mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, l));
-  }
-
-  void main() {
-    vec4 color = texture(uInteriorColor, vUv);
-    float dist = texture(uDistField, vUv).r;  // 0=edge, 1=deep interior
-
-    // Emissive passthrough: preserve original video luminance.
-    // Only apply a subtle edge occlusion ramp to sell chamfer→interior depth.
-    vec3 linear = toLinear(color.rgb);
-    float occ = smoothstep(0.0, uEdgeOcclusionWidth, dist);
-    linear *= mix(1.0 - uEdgeOcclusionStrength, 1.0, occ);
-
-    fragColor = vec4(toSRGB(linear), color.a);
-  }
-`;
-
-/**
- * Boundary effects shader — depth-reactive volumetric edge wall, rim lighting,
- * refraction, chromatic fringe, and occlusion. Now also driven by distance field.
- */
-const BOUNDARY_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  in vec2 aNormal;
-  uniform float uRimWidth;
-  uniform vec2 uMeshScale;
-  out vec2 vNormal;
-  out vec2 vEdgeUv;  // screen-space UV for sampling FBO textures
-  out float vEdgeDist; // 0 at edge, 1 at outer extent
-
-  void main() {
-    vec2 scaledPos = aPosition * uMeshScale;
-    vec2 scaledNormal = normalize(aNormal * uMeshScale);
-    vec2 pos = scaledPos + scaledNormal * uRimWidth;
-
-    // Pass screen-space UV of this fragment for FBO sampling
-    vEdgeUv = pos * 0.5 + 0.5;
-    vNormal = scaledNormal;
-
-    // Distance from the actual edge (0) to the outer rim extent (1)
-    vEdgeDist = length(pos - scaledPos) / max(uRimWidth, 0.001);
-
-    gl_Position = vec4(pos, 0.0, 1.0);
-  }
-`;
-
-const BOUNDARY_FS = /* glsl */ `#version 300 es
-  precision highp float;
-
-  uniform sampler2D uInteriorColor;
-  uniform sampler2D uInteriorDepth;
-  uniform sampler2D uDistField;
-  uniform float uRimIntensity;
-  uniform vec3 uRimColor;
-  uniform float uRefractionStrength;
-  uniform float uChromaticStrength;
-  uniform float uOcclusionIntensity;
-  uniform vec2 uTexelSize; // 1.0 / viewport resolution
-
-  // Volumetric edge wall
-  uniform float uEdgeThickness;
-  uniform float uEdgeSpecular;
-  uniform vec3 uEdgeColor;
-  uniform vec2 uLightDir;
-  uniform float uBevelIntensity;
-
-  in vec2 vNormal;
-  in vec2 vEdgeUv;
-  in float vEdgeDist;
-  out vec4 fragColor;
-
-  void main() {
-    // Clamp UV to valid range for texture sampling
-    vec2 sampleUv = clamp(vEdgeUv, vec2(0.001), vec2(0.999));
-
-    // Sample interior depth at this boundary location
-    float interiorDepth = texture(uInteriorDepth, sampleUv).r;
-
-    // === DEPTH-REACTIVE RIM (structural seam) ===
-    float depthReactivity = 1.0 - interiorDepth;  // 1=near, 0=far
-    float rimProfile = 1.0 - smoothstep(0.0, 1.0, vEdgeDist);
-    rimProfile = pow(rimProfile, 1.5); // sharper falloff = more structural
-
-    float depthPressure = mix(0.2, 1.0, depthReactivity * depthReactivity);
-    float rim = rimProfile * depthPressure * uRimIntensity;
-
-    vec3 rimCol = uRimColor;
-    rimCol.r += depthReactivity * 0.15;
-    rimCol.g += depthReactivity * 0.05;
-
-    // === REFRACTION DISTORTION ===
-    vec2 ts = uTexelSize * 3.0;
-    float dLeft  = texture(uInteriorDepth, sampleUv + vec2(-ts.x, 0.0)).r;
-    float dRight = texture(uInteriorDepth, sampleUv + vec2( ts.x, 0.0)).r;
-    float dUp    = texture(uInteriorDepth, sampleUv + vec2(0.0,  ts.y)).r;
-    float dDown  = texture(uInteriorDepth, sampleUv + vec2(0.0, -ts.y)).r;
-    vec2 depthGradient = vec2(dRight - dLeft, dUp - dDown);
-    vec2 refractUv = sampleUv + depthGradient * uRefractionStrength * rimProfile;
-    refractUv = clamp(refractUv, vec2(0.001), vec2(0.999));
-
-    vec4 refractedColor = texture(uInteriorColor, refractUv);
-
-    // === CHROMATIC FRINGE ===
-    float chromaticAmount = uChromaticStrength * depthReactivity * rimProfile;
-    vec2 chromaticDir = vNormal * chromaticAmount;
-    float cr = texture(uInteriorColor, refractUv + chromaticDir).r;
-    float cg = refractedColor.g;
-    float cb = texture(uInteriorColor, refractUv - chromaticDir).b;
-    vec3 chromaticColor = vec3(cr, cg, cb);
-
-    // === OCCLUSION CONTACT SHADOW ===
-    float occlusionAmount = smoothstep(0.4, 0.0, interiorDepth) * uOcclusionIntensity * rimProfile;
-
-    // === VOLUMETRIC EDGE WALL ===
-    // Sample distance field to get the inner-side distance at this boundary location
-    float edgeDist = texture(uDistField, sampleUv).r;
-    float wallZone = smoothstep(uEdgeThickness, 0.0, edgeDist) * rimProfile;
-
-    // Wall lighting from distance field gradient
-    vec2 dtx = vec2(1.0) / vec2(textureSize(uDistField, 0));
-    float wdL = texture(uDistField, sampleUv + vec2(-dtx.x, 0.0)).r;
-    float wdR = texture(uDistField, sampleUv + vec2( dtx.x, 0.0)).r;
-    float wdU = texture(uDistField, sampleUv + vec2(0.0,  dtx.y)).r;
-    float wdD = texture(uDistField, sampleUv + vec2(0.0, -dtx.y)).r;
-    vec2 wallNormal = vec2(wdR - wdL, wdU - wdD);
-    float wnLen = length(wallNormal);
-    if (wnLen > 0.001) wallNormal /= wnLen;
-
-    float wallSpec = pow(max(dot(wallNormal, uLightDir), 0.0), 16.0) * uEdgeSpecular;
-    vec3 wallColor = mix(refractedColor.rgb * 0.4, uEdgeColor, 0.3);
-    wallColor += vec3(wallSpec);
-
-    // === COMPOSITE ===
-    vec3 color = mix(refractedColor.rgb, chromaticColor, min(chromaticAmount * 10.0, 1.0));
-    color *= (1.0 - occlusionAmount * 0.4);
-
-    // Blend in volumetric wall
-    color = mix(color, wallColor, wallZone * uBevelIntensity);
-
-    // Add rim energy on top
-    color += rimCol * rim;
-
-    // Alpha: rim edge fades out
-    float alpha = rimProfile * max(rim, occlusionAmount + chromaticAmount * 5.0 + wallZone * 0.5);
-    alpha = clamp(alpha, 0.0, 1.0);
-
-    fragColor = vec4(color * alpha, alpha);
-  }
-`;
-
-/**
- * Chamfer geometry shader — renders lit chamfer ring around portal silhouette.
- * Chamfer extends outward from the stencil edge with angled 3D normals.
- * The interior video shows through the surface like frosted glass, with
- * progressive blur from inner (sharp) to outer (blurred) edge.
- *
- * Vertex format: [x, y, nx3, ny3, nz3, lerpT] — 6 floats per vertex.
- */
-const CHAMFER_VS = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  in vec3 aNormal3;
-  in float aLerpT;      // 0 = inner (at silhouette), 1 = outer edge
-  uniform vec2 uMeshScale;
-  out vec3 vNormal;
-  out vec2 vScreenUv;
-  out float vLerpT;
-
-  void main() {
-    vec2 sp = aPosition * uMeshScale;
-    vNormal = aNormal3;
-    vScreenUv = sp * 0.5 + 0.5;
-    vLerpT = aLerpT;
-    gl_Position = vec4(sp, 0.0, 1.0);
-  }
-`;
-
-const CHAMFER_FS = /* glsl */ `#version 300 es
-  precision highp float;
-  uniform vec3 uLightDir3;
-  uniform vec3 uChamferColor;
-  uniform float uChamferAmbient;
-  uniform float uChamferSpecular;
-  uniform float uChamferShininess;
-  uniform sampler2D uInteriorColor;
-  uniform vec2 uTexelSize;  // 1 / viewport resolution
-
-  in vec3 vNormal;
-  in vec2 vScreenUv;
-  in float vLerpT;
-  out vec4 fragColor;
-
-  vec3 toLinear(vec3 s) {
-    return mix(s / 12.92, pow((s + 0.055) / 1.055, vec3(2.4)), step(0.04045, s));
-  }
-  vec3 toSRGB(vec3 l) {
-    return mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, l));
-  }
-
-  // Approximate gaussian blur via 13-tap poisson disc, radius scaled by vLerpT.
-  vec3 blurSample(vec2 center, float radius) {
-    // Poisson disc offsets (normalized to unit circle)
-    const vec2 offsets[12] = vec2[12](
-      vec2(-0.326, -0.406), vec2(-0.840, -0.074), vec2(-0.696,  0.457),
-      vec2(-0.203,  0.621), vec2( 0.962, -0.195), vec2( 0.473, -0.480),
-      vec2( 0.519,  0.767), vec2( 0.185, -0.893), vec2( 0.507,  0.064),
-      vec2(-0.321, -0.860), vec2(-0.791,  0.557), vec2( 0.330,  0.418)
-    );
-    vec3 sum = texture(uInteriorColor, center).rgb;
-    for (int i = 0; i < 12; i++) {
-      vec2 uv = center + offsets[i] * radius;
-      uv = clamp(uv, vec2(0.001), vec2(0.999));
-      sum += texture(uInteriorColor, uv).rgb;
-    }
-    return sum / 13.0;
-  }
-
-  void main() {
-    vec3 N = normalize(vNormal);
-    vec3 L = normalize(uLightDir3);
-    vec3 V = vec3(0.0, 0.0, -1.0);  // orthographic view direction
-
-    // Blinn-Phong lighting in linear space
-    float diff = max(dot(N, L), 0.0);
-    vec3 H = normalize(L + V);
-    float spec = pow(max(dot(N, H), 0.0), uChamferShininess) * uChamferSpecular;
-
-    // Sample interior video with progressive blur (sharper at inner edge)
-    vec2 uv = clamp(vScreenUv, vec2(0.001), vec2(0.999));
-    float blurRadius = vLerpT * 12.0 * length(uTexelSize);
-    vec3 videoSample = blurRadius > 0.0001
-      ? blurSample(uv, blurRadius)
-      : texture(uInteriorColor, uv).rgb;
-
-    // Base color: video tinted through chamfer color (like frosted glass)
-    vec3 video = toLinear(videoSample);
-    vec3 tint = toLinear(uChamferColor);
-    // Blend: mostly video near inner edge, more tinted at outer edge
-    vec3 base = mix(video, video * tint * 3.0, vLerpT * 0.5);
-
-    // Apply Blinn-Phong
-    vec3 lit = base * (uChamferAmbient + (1.0 - uChamferAmbient) * diff) + vec3(spec);
-    fragColor = vec4(toSRGB(lit), 1.0);
-  }
-`;
+import STENCIL_VS from './shaders/portal/stencil.vert.glsl?raw';
+import STENCIL_FS from './shaders/portal/stencil.frag.glsl?raw';
+import MASK_VS from './shaders/portal/mask.vert.glsl?raw';
+import MASK_FS from './shaders/portal/mask.frag.glsl?raw';
+import JFA_SEED_VS from './shaders/portal/jfa-seed.vert.glsl?raw';
+import JFA_SEED_FS from './shaders/portal/jfa-seed.frag.glsl?raw';
+import JFA_FLOOD_VS from './shaders/portal/jfa-flood.vert.glsl?raw';
+import JFA_FLOOD_FS from './shaders/portal/jfa-flood.frag.glsl?raw';
+import JFA_DIST_VS from './shaders/portal/jfa-dist.vert.glsl?raw';
+import JFA_DIST_FS from './shaders/portal/jfa-dist.frag.glsl?raw';
+import INTERIOR_VS from './shaders/portal/interior.vert.glsl?raw';
+import INTERIOR_FS from './shaders/portal/interior.frag.glsl?raw';
+import COMPOSITE_VS from './shaders/portal/composite.vert.glsl?raw';
+import COMPOSITE_FS from './shaders/portal/composite.frag.glsl?raw';
+import BOUNDARY_VS from './shaders/portal/boundary.vert.glsl?raw';
+import BOUNDARY_FS from './shaders/portal/boundary.frag.glsl?raw';
+import CHAMFER_VS from './shaders/portal/chamfer.vert.glsl?raw';
+import CHAMFER_FS from './shaders/portal/chamfer.frag.glsl?raw';
 
 // ---------------------------------------------------------------------------
 // Configuration interface
@@ -681,7 +117,7 @@ export interface PortalRendererConfig {
   chamferWidth: number;
   /** Chamfer angle in degrees (0 = face-forward, 90 = wall). Default: 45 */
   chamferAngle: number;
-  /** Chamfer base color [r, g, b] in 0–1 range. Default: [0.15, 0.15, 0.18] */
+  /** Chamfer base color [r, g, b] in 0-1 range. Default: [0.15, 0.15, 0.18] */
   chamferColor: [number, number, number];
   /** Chamfer ambient light level. Default: 0.12 */
   chamferAmbient: number;
@@ -704,7 +140,7 @@ export interface PortalRendererConfig {
 // Edge mesh generation
 // ---------------------------------------------------------------------------
 
-function buildEdgeMesh(edgeVertices: Float32Array): { vertices: Float32Array; count: number } {
+export function buildEdgeMesh(edgeVertices: Float32Array): { vertices: Float32Array; count: number } {
   const segments: number[] = [];
   let totalVerts = 0;
 
@@ -754,7 +190,7 @@ function buildEdgeMesh(edgeVertices: Float32Array): { vertices: Float32Array; co
  *
  * Vertex format: [x, y, nx3, ny3, nz3, lerpT] — 6 floats per vertex.
  */
-function buildChamferMesh(
+export function buildChamferMesh(
   edgeVertices: Float32Array,
   contourOffsets: number[],
   contourIsHole: boolean[],
@@ -890,12 +326,8 @@ function buildChamferMesh(
 // Renderer
 // ---------------------------------------------------------------------------
 
-export class PortalRenderer {
-  private static readonly RESIZE_DEBOUNCE_MS = 100;
-
-  private readonly canvas: HTMLCanvasElement;
+export class PortalRenderer extends RendererBase {
   private gl: WebGL2RenderingContext | null = null;
-  private readonly container: HTMLElement;
 
   // Render passes (each owns its program + cached uniforms)
   private stencilPass: RenderPass | null = null;
@@ -931,49 +363,13 @@ export class PortalRenderer {
   private fboHeight = 0;
 
   // JFA distance field system (unit 4 for final distance)
-  private maskFbo: WebGLFramebuffer | null = null;
-  private maskTex: WebGLTexture | null = null;
-  private jfaPingFbo: WebGLFramebuffer | null = null;
-  private jfaPingTex: WebGLTexture | null = null;
-  private jfaPongFbo: WebGLFramebuffer | null = null;
-  private jfaPongTex: WebGLTexture | null = null;
-  private distFbo: WebGLFramebuffer | null = null;
-  private distTex: WebGLTexture | null = null;
-  private jfaWidth = 0;
-  private jfaHeight = 0;
-  private distFieldDirty = true;
+  private jfa: JFADistanceField | null = null;
   private hasColorBufferFloat = false;
 
-  // Dimensions
-  /** GPU texture dimensions (may be clamped by quality tier). */
-  private depthWidth = 0;
-  private depthHeight = 0;
-  /** Original source depth dimensions (from precomputed data). */
-  private sourceDepthWidth = 0;
-  private sourceDepthHeight = 0;
-  /** Reusable buffer for subsampling depth data when GPU dims < source dims. */
-  private depthSubsampleBuffer: Uint8Array | null = null;
-  private videoAspect = 16 / 9;
+  // Dimensions (portal-specific: mesh scale)
   private meshAspect = 1;
   private meshScaleX = 0.65;
   private meshScaleY = 0.65;
-
-  // Callbacks
-  private readDepth: ((timeSec: number) => Uint8Array) | null = null;
-  private readInput: (() => ParallaxInput) | null = null;
-  private playbackVideo: HTMLVideoElement | null = null;
-  private onVideoFrame: ((currentTime: number, frameNumber: number) => void) | null = null;
-
-  // Animation
-  private animationFrameHandle = 0;
-  private rvfcHandle = 0;
-  private rvfcSupported = false;
-  private resizeObserver: ResizeObserver | null = null;
-  private resizeTimer: number | null = null;
-
-  // UV transform
-  private uvOffset = [0, 0];
-  private uvScale = [1, 1];
 
   // Precomputed light direction (2D for bevel, 3D for chamfer)
   private lightDirX = -0.707;
@@ -982,11 +378,9 @@ export class PortalRenderer {
 
   private readonly config: PortalRendererConfig;
 
-  /** Adaptive quality parameters resolved at construction time. */
-  private readonly qualityParams: QualityParams;
-
   constructor(parent: HTMLElement, config: PortalRendererConfig) {
-    this.container = parent;
+    super(parent);
+
     this.config = { ...config };
 
     // Register source texture slots at init time — cached references for hot path.
@@ -1005,7 +399,6 @@ export class PortalRenderer {
       this.lightDir3 = [ld[0] / ldLen, ld[1] / ldLen, ld[2] / ldLen];
     }
 
-    this.canvas = document.createElement('canvas');
     const gl = this.canvas.getContext('webgl2', {
       antialias: true,
       alpha: true,
@@ -1033,12 +426,8 @@ export class PortalRenderer {
     gl.clearColor(0, 0, 0, 0);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
-    this.container.appendChild(this.canvas);
     this.initGPUResources();
     this.setupResizeHandling();
-
-    this.canvas.addEventListener('webglcontextlost', this.handleContextLost);
-    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
   }
 
   initialize(
@@ -1052,7 +441,7 @@ export class PortalRenderer {
 
     this.disposeTextures();
     this.disposeFBO();
-    this.disposeJFA();
+    if (this.jfa) { this.jfa.dispose(); this.jfa = null; }
     this.disposeStencilGeometry();
     this.disposeBoundaryGeometry();
     this.disposeChamferGeometry();
@@ -1060,28 +449,8 @@ export class PortalRenderer {
     this.videoAspect = video.videoWidth / video.videoHeight;
     this.meshAspect = mesh.aspect;
 
-    // Store source depth dimensions (original precomputed data).
-    this.sourceDepthWidth = depthWidth;
-    this.sourceDepthHeight = depthHeight;
-
     // Clamp depth dimensions to the quality tier's maximum.
-    const maxDim = this.qualityParams.depthMaxDim;
-    let gpuDepthWidth = depthWidth;
-    let gpuDepthHeight = depthHeight;
-    if (gpuDepthWidth > maxDim || gpuDepthHeight > maxDim) {
-      const scale = maxDim / Math.max(gpuDepthWidth, gpuDepthHeight);
-      gpuDepthWidth = Math.max(1, Math.round(gpuDepthWidth * scale));
-      gpuDepthHeight = Math.max(1, Math.round(gpuDepthHeight * scale));
-    }
-    this.depthWidth = gpuDepthWidth;
-    this.depthHeight = gpuDepthHeight;
-
-    // Allocate subsample buffer if GPU dimensions differ from source.
-    if (gpuDepthWidth !== depthWidth || gpuDepthHeight !== depthHeight) {
-      this.depthSubsampleBuffer = new Uint8Array(gpuDepthWidth * gpuDepthHeight);
-    } else {
-      this.depthSubsampleBuffer = null;
-    }
+    this.clampDepthDimensions(depthWidth, depthHeight, this.qualityParams.depthMaxDim);
 
     // --- Source video texture (via TextureRegistry, unit 0) ---
     this.videoSlot.texture = gl.createTexture();
@@ -1363,228 +732,29 @@ export class PortalRenderer {
     const gl = this.gl;
     if (!gl) return;
 
-    this.disposeJFA();
-
-    // Reduced resolution for JFA (divisor set by quality tier: 2 = half, 4 = quarter).
-    const div = this.qualityParams.jfaDivisor;
-    const w = Math.max(1, Math.round(canvasWidth / div));
-    const h = Math.max(1, Math.round(canvasHeight / div));
-    this.jfaWidth = w;
-    this.jfaHeight = h;
-
-    const createFBO = (tex: WebGLTexture, internalFormat: number, width: number, height: number): WebGLFramebuffer => {
-      const fbo = gl.createFramebuffer()!;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texStorage2D(gl.TEXTURE_2D, 1, internalFormat, width, height);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      return fbo;
-    };
-
-    // Binary mask (R8 at half-res)
-    this.maskTex = gl.createTexture()!;
-    this.maskFbo = createFBO(this.maskTex, gl.R8, w, h);
-
-    // JFA ping-pong (RG16F at half-res — stores 2D seed coordinates).
-    // RG16F requires EXT_color_buffer_float to be color-renderable.
-    // Fall back to RGBA16F (also requires the ext) then RGBA8 if unavailable.
-    const jfaFormat = this.hasColorBufferFloat ? gl.RG16F : gl.RGBA8;
-    this.jfaPingTex = gl.createTexture()!;
-    this.jfaPingFbo = createFBO(this.jfaPingTex, jfaFormat, w, h);
-
-    this.jfaPongTex = gl.createTexture()!;
-    this.jfaPongFbo = createFBO(this.jfaPongTex, jfaFormat, w, h);
-
-    // Final distance texture (R8 at half-res — sampled on unit 4)
-    this.distTex = gl.createTexture()!;
-    this.distFbo = createFBO(this.distTex, gl.RGBA8, w, h);
-
-    this.distFieldDirty = true;
+    if (!this.jfa) {
+      this.jfa = new JFADistanceField(gl, this.hasColorBufferFloat);
+    }
+    this.jfa.createResources(canvasWidth, canvasHeight, this.qualityParams.jfaDivisor);
   }
 
   private computeDistanceField(): void {
-    const gl = this.gl;
-    if (!gl || !this.maskFbo || !this.maskVao || !this.quadVao) return;
-    if (!this.jfaPingFbo || !this.jfaPongFbo || !this.distFbo) return;
+    if (!this.jfa || !this.maskPass || !this.jfaSeedPass ||
+        !this.jfaFloodPass || !this.jfaDistPass ||
+        !this.maskVao || !this.quadVao) return;
 
-    const w = this.jfaWidth;
-    const h = this.jfaHeight;
-    if (w === 0 || h === 0) return;
-
-    // Save viewport state
-    gl.viewport(0, 0, w, h);
-    gl.disable(gl.STENCIL_TEST);
-    gl.disable(gl.BLEND);
-
-    // --- Step 1: Render binary mask ---
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.maskFbo);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    gl.useProgram(this.maskPass!.program);
-    gl.uniform2f(this.maskPass!.uniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
-    gl.bindVertexArray(this.maskVao);
-    gl.drawElements(gl.TRIANGLES, this.stencilIndexCount, gl.UNSIGNED_SHORT, 0);
-
-    // --- Step 2: Seed extraction ---
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.jfaPingFbo);
-    gl.clearColor(-1, -1, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    gl.useProgram(this.jfaSeedPass!.program);
-    // Bind mask texture to a temporary unit (5)
-    gl.activeTexture(gl.TEXTURE5);
-    gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
-    gl.uniform1i(this.jfaSeedPass!.uniforms.uMask, 5);
-    gl.uniform2f(this.jfaSeedPass!.uniforms.uTexelSize, 1.0 / w, 1.0 / h);
-
-    gl.bindVertexArray(this.quadVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    // --- Step 3: JFA flood iterations ---
-    const maxDim = Math.max(w, h);
-    const iterations: number[] = [];
-    let step = Math.ceil(maxDim / 2);
-    while (step >= 1) {
-      iterations.push(step);
-      step = Math.floor(step / 2);
-    }
-
-    gl.useProgram(this.jfaFloodPass!.program);
-    let readTex = this.jfaPingTex;
-    let writeFbo = this.jfaPongFbo;
-    let writeTex = this.jfaPongTex;
-
-    for (let i = 0; i < iterations.length; i++) {
-      const stepSizeUv = iterations[i] / Math.max(w, h);
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, writeFbo);
-
-      gl.activeTexture(gl.TEXTURE5);
-      gl.bindTexture(gl.TEXTURE_2D, readTex);
-      gl.uniform1i(this.jfaFloodPass!.uniforms.uSeedTex, 5);
-      gl.uniform1f(this.jfaFloodPass!.uniforms.uStepSize, stepSizeUv);
-
-      gl.bindVertexArray(this.quadVao);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-      // Swap ping-pong
-      const tmpTex = readTex;
-      const tmpFbo = writeFbo;
-      readTex = writeTex;
-      writeFbo = tmpFbo === this.jfaPongFbo ? this.jfaPingFbo! : this.jfaPongFbo!;
-      writeTex = tmpTex;
-    }
-
-    // readTex now has the final seed coordinates
-
-    // --- Step 4: Distance conversion ---
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.distFbo);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    gl.useProgram(this.jfaDistPass!.program);
-
-    gl.activeTexture(gl.TEXTURE5);
-    gl.bindTexture(gl.TEXTURE_2D, readTex);
-    gl.uniform1i(this.jfaDistPass!.uniforms.uSeedTex, 5);
-
-    gl.activeTexture(gl.TEXTURE6);
-    gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
-    gl.uniform1i(this.jfaDistPass!.uniforms.uMask, 6);
-
-    const distRange = Math.max(this.config.bevelWidth, this.config.edgeOcclusionWidth);
-    gl.uniform1f(this.jfaDistPass!.uniforms.uBevelWidth, distRange);
-
-    gl.bindVertexArray(this.quadVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    // Bind the final distance texture to unit 4 for use in render passes
-    gl.activeTexture(gl.TEXTURE4);
-    gl.bindTexture(gl.TEXTURE_2D, this.distTex);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.distFieldDirty = false;
-  }
-
-  // -----------------------------------------------------------------------
-  // Render loop control
-  // -----------------------------------------------------------------------
-
-  start(
-    video: HTMLVideoElement,
-    readDepth: (timeSec: number) => Uint8Array,
-    readInput: () => ParallaxInput,
-    onVideoFrame?: (currentTime: number, frameNumber: number) => void
-  ): void {
-    this.stop();
-
-    this.playbackVideo = video;
-    this.readDepth = readDepth;
-    this.readInput = readInput;
-    this.onVideoFrame = onVideoFrame ?? null;
-
-    this.rvfcSupported = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-
-    if (this.rvfcSupported) {
-      this.rvfcHandle = video.requestVideoFrameCallback(this.videoFrameLoop);
-    }
-
-    this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
-  }
-
-  stop(): void {
-    if (this.animationFrameHandle) {
-      window.cancelAnimationFrame(this.animationFrameHandle);
-      this.animationFrameHandle = 0;
-    }
-    if (this.rvfcHandle && this.playbackVideo) {
-      this.playbackVideo.cancelVideoFrameCallback(this.rvfcHandle);
-      this.rvfcHandle = 0;
-    }
-    this.playbackVideo = null;
-    this.readDepth = null;
-    this.readInput = null;
-    this.onVideoFrame = null;
-    this.rvfcSupported = false;
-  }
-
-  dispose(): void {
-    this.stop();
-    this.disposeTextures();
-    this.disposeFBO();
-    this.disposeJFA();
-    this.disposeStencilGeometry();
-    this.disposeBoundaryGeometry();
-    this.disposeChamferGeometry();
-    this.disposeGPUResources();
-
-    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
-    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
-
-    // Explicitly release the WebGL context to free GPU resources.
-    // Without this, contexts leak until the canvas is garbage collected.
-    if (this.gl) {
-      const ext = this.gl.getExtension('WEBGL_lose_context');
-      ext?.loseContext();
-      this.gl = null;
-    }
-    this.canvas.remove();
-
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
-    window.removeEventListener('resize', this.scheduleResizeRecalculate);
-    if (this.resizeTimer !== null) {
-      window.clearTimeout(this.resizeTimer);
-      this.resizeTimer = null;
-    }
+    this.jfa.compute({
+      maskPass: this.maskPass,
+      seedPass: this.jfaSeedPass,
+      floodPass: this.jfaFloodPass,
+      distPass: this.jfaDistPass,
+      maskVao: this.maskVao,
+      quadVao: this.quadVao,
+      meshScaleX: this.meshScaleX,
+      meshScaleY: this.meshScaleY,
+      stencilIndexCount: this.stencilIndexCount,
+      distRange: Math.max(this.config.bevelWidth, this.config.edgeOcclusionWidth),
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -1638,30 +808,16 @@ export class PortalRenderer {
   }
 
   // -----------------------------------------------------------------------
-  // RVFC loop
+  // Abstract method implementations (RendererBase)
   // -----------------------------------------------------------------------
 
-  private readonly videoFrameLoop = (
-    _now: DOMHighResTimeStamp,
-    metadata: VideoFrameCallbackMetadata
-  ) => {
-    const video = this.playbackVideo;
-    if (!video) return;
-    this.rvfcHandle = video.requestVideoFrameCallback(this.videoFrameLoop);
-    const timeSec = metadata.mediaTime ?? video.currentTime;
-    this.updateDepthTexture(timeSec);
-    if (this.onVideoFrame) {
-      this.onVideoFrame(timeSec, metadata.presentedFrames ?? 0);
-    }
-  };
-
-  // -----------------------------------------------------------------------
-  // Main render loop
-  // -----------------------------------------------------------------------
-
-  private readonly renderLoop = () => {
-    this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
-
+  /**
+   * Main render loop — called every animation frame at display refresh rate.
+   *
+   * Handles interior FBO rendering, stencil marking, emissive composite,
+   * chamfer geometry, and boundary effects in a multi-pass pipeline.
+   */
+  protected onRenderFrame(): void {
     const gl = this.gl;
     const video = this.playbackVideo;
     if (!gl || !this.interiorPass || !this.quadVao) return;
@@ -1669,7 +825,7 @@ export class PortalRenderer {
     if (!this.interiorFbo || !this.interiorColorTex || !this.interiorDepthTex) return;
 
     // Compute distance field if needed (runs once on resize)
-    if (this.distFieldDirty && this.maskVao && this.distFbo) {
+    if (this.jfa?.isDirty && this.maskVao) {
       this.computeDistanceField();
       // Restore viewport after JFA
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -1682,7 +838,7 @@ export class PortalRenderer {
 
     // Fallback depth update
     if (!this.rvfcSupported) {
-      this.updateDepthTexture(video.currentTime);
+      this.onDepthUpdate(video.currentTime);
     }
 
     // Read input
@@ -1694,7 +850,7 @@ export class PortalRenderer {
     }
 
     // ============================
-    // PASS 1: Interior scene → FBO
+    // PASS 1: Interior scene -> FBO
     // ============================
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.interiorFbo);
 
@@ -1755,7 +911,7 @@ export class PortalRenderer {
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, this.interiorDepthTex);
     gl.activeTexture(gl.TEXTURE4);
-    gl.bindTexture(gl.TEXTURE_2D, this.distTex);
+    gl.bindTexture(gl.TEXTURE_2D, this.jfa?.distanceTexture ?? null);
 
     gl.useProgram(this.compositePass!.program);
     gl.bindVertexArray(this.quadVao);
@@ -1789,30 +945,17 @@ export class PortalRenderer {
 
       gl.disable(gl.BLEND);
     }
-  };
+  }
 
-  private updateDepthTexture(timeSec: number): void {
+  /**
+   * Upload depth data to the GPU texture.
+   * Called from the RVFC loop at video frame rate, or from RAF fallback.
+   */
+  protected onDepthUpdate(timeSec: number): void {
     const gl = this.gl;
     if (!gl || !this.readDepth || !this.depthSlot.texture) return;
-    let depthData = this.readDepth(timeSec);
 
-    // Subsample if GPU texture is smaller than source depth data.
-    if (this.depthSubsampleBuffer) {
-      const buf = this.depthSubsampleBuffer;
-      const srcW = this.sourceDepthWidth;
-      const dstW = this.depthWidth;
-      const dstH = this.depthHeight;
-      for (let y = 0; y < dstH; y++) {
-        const srcY = Math.min(Math.round(y * srcW / dstW), this.sourceDepthHeight - 1);
-        const srcRowOffset = srcY * srcW;
-        const dstRowOffset = y * dstW;
-        for (let x = 0; x < dstW; x++) {
-          const srcX = Math.min(Math.round(x * srcW / dstW), srcW - 1);
-          buf[dstRowOffset + x] = depthData[srcRowOffset + srcX];
-        }
-      }
-      depthData = buf;
-    }
+    const depthData = this.subsampleDepth(this.readDepth(timeSec));
 
     gl.activeTexture(gl.TEXTURE0 + this.depthSlot.unit);
     gl.bindTexture(gl.TEXTURE_2D, this.depthSlot.texture);
@@ -1827,28 +970,7 @@ export class PortalRenderer {
   // Resize handling
   // -----------------------------------------------------------------------
 
-  private setupResizeHandling(): void {
-    if (typeof ResizeObserver !== 'undefined') {
-      this.resizeObserver = new ResizeObserver(() => {
-        this.scheduleResizeRecalculate();
-      });
-      this.resizeObserver.observe(this.container);
-    }
-    window.addEventListener('resize', this.scheduleResizeRecalculate);
-    this.recalculateViewportLayout();
-  }
-
-  private readonly scheduleResizeRecalculate = () => {
-    if (this.resizeTimer !== null) {
-      window.clearTimeout(this.resizeTimer);
-    }
-    this.resizeTimer = window.setTimeout(() => {
-      this.resizeTimer = null;
-      this.recalculateViewportLayout();
-    }, PortalRenderer.RESIZE_DEBOUNCE_MS);
-  };
-
-  private recalculateViewportLayout(): void {
+  protected recalculateViewportLayout(): void {
     const gl = this.gl;
     if (!gl) return;
 
@@ -1873,29 +995,12 @@ export class PortalRenderer {
     const jfaDiv = this.qualityParams.jfaDivisor;
     const jfaW = Math.max(1, Math.round(bufferWidth / jfaDiv));
     const jfaH = Math.max(1, Math.round(bufferHeight / jfaDiv));
-    if (this.jfaWidth !== jfaW || this.jfaHeight !== jfaH) {
+    if (!this.jfa || this.jfa.width !== jfaW || this.jfa.height !== jfaH) {
       this.createJFAResources(bufferWidth, bufferHeight);
     }
 
     // Cover-fit UV transform
-    const viewportAspect = width / height;
-    const extra = this.config.parallaxStrength + this.config.overscanPadding;
-
-    let scaleU = 1.0;
-    let scaleV = 1.0;
-
-    if (viewportAspect > this.videoAspect) {
-      scaleV = this.videoAspect / viewportAspect;
-    } else {
-      scaleU = viewportAspect / this.videoAspect;
-    }
-
-    const overscanScale = 1.0 + extra * 2;
-    scaleU /= overscanScale;
-    scaleV /= overscanScale;
-
-    this.uvOffset = [(1.0 - scaleU) / 2.0, (1.0 - scaleV) / 2.0];
-    this.uvScale = [scaleU, scaleV];
+    this.computeCoverFitUV(this.config.parallaxStrength, this.config.overscanPadding);
 
     if (this.interiorPass) {
       gl.useProgram(this.interiorPass.program);
@@ -1904,6 +1009,7 @@ export class PortalRenderer {
     }
 
     // Mesh scale
+    const viewportAspect = width / height;
     const fillFactor = 0.65;
     this.meshScaleX = fillFactor;
     this.meshScaleY = fillFactor;
@@ -1929,28 +1035,15 @@ export class PortalRenderer {
     }
 
     // Mark distance field as dirty so it recomputes on next frame
-    this.distFieldDirty = true;
-  }
-
-  private getViewportSize(): { width: number; height: number } {
-    const width = Math.max(1, Math.round(this.container.clientWidth || window.innerWidth));
-    const height = Math.max(1, Math.round(this.container.clientHeight || window.innerHeight));
-    return { width, height };
+    if (this.jfa) this.jfa.markDirty();
   }
 
   // -----------------------------------------------------------------------
   // Context loss
   // -----------------------------------------------------------------------
 
-  private readonly handleContextLost = (event: Event) => {
-    event.preventDefault();
-    if (this.animationFrameHandle) {
-      window.cancelAnimationFrame(this.animationFrameHandle);
-      this.animationFrameHandle = 0;
-    }
-  };
-
-  private readonly handleContextRestored = () => {
+  /** Rebuild GPU state after context restoration. */
+  protected onContextRestored(): void {
     const gl = this.canvas.getContext('webgl2', {
       alpha: true,
       premultipliedAlpha: true,
@@ -1965,9 +1058,9 @@ export class PortalRenderer {
     // Rebuild FBOs and JFA resources (destroyed on context loss)
     this.recalculateViewportLayout();
     if (this.playbackVideo) {
-      this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
+      this.animationFrameHandle = window.requestAnimationFrame(() => this.onRenderFrame());
     }
-  };
+  }
 
   // -----------------------------------------------------------------------
   // Cleanup
@@ -1990,22 +1083,6 @@ export class PortalRenderer {
     this.fboHeight = 0;
   }
 
-  private disposeJFA(): void {
-    const gl = this.gl;
-    if (!gl) return;
-    if (this.maskTex) { gl.deleteTexture(this.maskTex); this.maskTex = null; }
-    if (this.maskFbo) { gl.deleteFramebuffer(this.maskFbo); this.maskFbo = null; }
-    if (this.jfaPingTex) { gl.deleteTexture(this.jfaPingTex); this.jfaPingTex = null; }
-    if (this.jfaPingFbo) { gl.deleteFramebuffer(this.jfaPingFbo); this.jfaPingFbo = null; }
-    if (this.jfaPongTex) { gl.deleteTexture(this.jfaPongTex); this.jfaPongTex = null; }
-    if (this.jfaPongFbo) { gl.deleteFramebuffer(this.jfaPongFbo); this.jfaPongFbo = null; }
-    if (this.distTex) { gl.deleteTexture(this.distTex); this.distTex = null; }
-    if (this.distFbo) { gl.deleteFramebuffer(this.distFbo); this.distFbo = null; }
-    this.jfaWidth = 0;
-    this.jfaHeight = 0;
-    this.distFieldDirty = true;
-  }
-
   private disposeStencilGeometry(): void {
     const gl = this.gl;
     if (!gl) return;
@@ -2019,6 +1096,25 @@ export class PortalRenderer {
     if (!gl) return;
     if (this.boundaryVao) { gl.deleteVertexArray(this.boundaryVao); this.boundaryVao = null; }
     this.boundaryVertexCount = 0;
+  }
+
+  /** Dispose all GPU resources — called by base class dispose(). */
+  protected disposeRenderer(): void {
+    this.disposeTextures();
+    this.disposeFBO();
+    if (this.jfa) { this.jfa.dispose(); this.jfa = null; }
+    this.disposeStencilGeometry();
+    this.disposeBoundaryGeometry();
+    this.disposeChamferGeometry();
+    this.disposeGPUResources();
+
+    // Explicitly release the WebGL context to free GPU resources.
+    // Without this, contexts leak until the canvas is garbage collected.
+    if (this.gl) {
+      const ext = this.gl.getExtension('WEBGL_lose_context');
+      ext?.loseContext();
+      this.gl = null;
+    }
   }
 
   /** Dispose all render passes and shared VAO. */

@@ -19,6 +19,8 @@ import {
 } from '../../precomputed-depth';
 import { analyzeDepthFrames, deriveParallaxParams } from '../../depth-analysis';
 import { ParallaxRenderer } from '../../parallax-renderer';
+import { ParallaxRendererWebGPU } from '../../parallax-renderer-webgpu';
+import { detectGPUBackend } from '../../gpu-backend';
 import type { ParallaxInput } from '../../input-handler';
 import type {
   LayershiftReadyDetail,
@@ -198,7 +200,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     return [
       'src', 'depth-src', 'depth-meta',
       'parallax-x', 'parallax-y', 'parallax-max',
-      'layers', 'overscan', 'quality',
+      'layers', 'overscan', 'quality', 'gpu-backend',
       'autoplay', 'loop', 'muted',
     ];
   }
@@ -207,7 +209,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
 
   private shadow: ShadowRoot;
   private container: HTMLDivElement | null = null;
-  private renderer: ParallaxRenderer | null = null;
+  private renderer: ParallaxRenderer | ParallaxRendererWebGPU | null = null;
   private inputHandler: ComponentInputHandler | null = null;
   private video: HTMLVideoElement | null = null;
   private loopCount = 0;
@@ -245,6 +247,11 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     const val = this.getAttribute('quality');
     if (val === 'auto' || val === 'high' || val === 'medium' || val === 'low') return val;
     return undefined;
+  }
+  private get gpuBackend(): 'webgpu' | 'webgl2' | 'auto' {
+    const val = this.getAttribute('gpu-backend');
+    if (val === 'webgpu' || val === 'webgl2') return val;
+    return 'auto';
   }
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
@@ -395,8 +402,13 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
       const interpolator = new DepthFrameInterpolator(depthData);
       const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
+      // Detect GPU backend (WebGPU with WebGL2 fallback).
+      const backend = await detectGPUBackend(this.gpuBackend);
+
+      if (signal.aborted) return;
+
       // Create renderer with merged config: explicit overrides > derived > defaults.
-      this.renderer = new ParallaxRenderer(this.container!, {
+      const rendererConfig = {
         parallaxStrength,
         pomEnabled: true,
         pomSteps: derivedParams.pomSteps,
@@ -407,7 +419,18 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         verticalReduction: derivedParams.verticalReduction,
         dofStart: derivedParams.dofStart,
         dofStrength: derivedParams.dofStrength,
-      });
+      };
+
+      if (backend.type === 'webgpu' && backend.device && backend.adapter) {
+        this.renderer = new ParallaxRendererWebGPU(
+          this.container!,
+          rendererConfig,
+          backend.device,
+          backend.adapter.info,
+        );
+      } else {
+        this.renderer = new ParallaxRenderer(this.container!, rendererConfig);
+      }
 
       this.renderer.initialize(video, depthData.meta.width, depthData.meta.height);
 

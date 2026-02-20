@@ -9,6 +9,8 @@ export interface LayershiftProps {
   overscan?: number;
   /** Adaptive quality tier ('auto' | 'high' | 'medium' | 'low'). */
   quality?: 'auto' | 'high' | 'medium' | 'low';
+  /** GPU backend preference ('auto' | 'webgpu' | 'webgl2'). Default: 'auto'. */
+  gpuBackend?: 'auto' | 'webgpu' | 'webgl2';
   autoplay?: boolean;
   loop?: boolean;
   muted?: boolean;
@@ -95,6 +97,8 @@ export interface LayershiftPortalProps {
   pomSteps?: number;
   /** Adaptive quality tier ('auto' | 'high' | 'medium' | 'low'). */
   quality?: 'auto' | 'high' | 'medium' | 'low';
+  /** GPU backend preference ('auto' | 'webgpu' | 'webgl2'). Default: 'auto'. */
+  gpuBackend?: 'auto' | 'webgpu' | 'webgl2';
   // Boundary effects
   rimIntensity?: number;
   rimColor?: string;

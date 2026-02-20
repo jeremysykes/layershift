@@ -32,7 +32,6 @@
  * The filtered depth texture is rendered via FBO bilateral filter pass.
  */
 
-import type { ParallaxInput } from './input-handler';
 import {
   compileShader,
   linkProgram,
@@ -41,313 +40,18 @@ import {
 } from './webgl-utils';
 import type { RenderPass, FBOPass, TextureSlot } from './render-pass';
 import { TextureRegistry } from './render-pass';
-import type { QualityTier, QualityParams } from './quality';
+import type { QualityTier } from './quality';
 import { resolveQuality } from './quality';
+import { RendererBase } from './renderer-base';
 
 // ---------------------------------------------------------------------------
-// GLSL Shaders (GLSL 300 es for WebGL 2)
+// GLSL Shaders (imported from external files via Vite ?raw)
 // ---------------------------------------------------------------------------
 
-/**
- * Vertex shader — trivial pass-through for fullscreen quad.
- *
- * Used by the parallax pass. Maps clip-space [-1,1] to UV [0,1]
- * and applies a cover-fit transform via uniforms.
- */
-const VERTEX_SHADER = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-
-  // UV coordinates for cover-fit + overscan.
-  // Computed on the CPU and passed as a uniform to avoid
-  // recreating geometry on every resize.
-  uniform vec2 uUvOffset;
-  uniform vec2 uUvScale;
-
-  out vec2 vUv;
-  out vec2 vScreenUv;
-
-  void main() {
-    // Map from clip space [-1,1] to [0,1], then apply cover-fit transform
-    vec2 baseUv = aPosition * 0.5 + 0.5;
-    vUv = baseUv * uUvScale + uUvOffset;
-    // Screen-space UV always [0,1] — used for vignette and edge fade
-    // which should operate on screen position, not texture coordinates.
-    vScreenUv = baseUv;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-/**
- * Simple vertex shader for the bilateral filter pass.
- *
- * No cover-fit transform — the filter operates in raw depth texture space.
- * Maps clip-space [-1,1] directly to UV [0,1].
- */
-const BILATERAL_VERTEX_SHADER = /* glsl */ `#version 300 es
-  in vec2 aPosition;
-  out vec2 vUv;
-
-  void main() {
-    vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-  }
-`;
-
-/**
- * Bilateral filter fragment shader — edge-preserving depth smoothing.
- *
- * Weights each neighbor by both spatial distance and depth similarity
- * to the center pixel. Sharp depth boundaries (e.g., a silhouette
- * against the sky) are preserved because dissimilar-depth neighbors
- * receive near-zero weight. Smooth regions still get denoised.
- *
- * Parameters match the original CPU-side filter exactly:
- * - Spatial sigma = 1.5 texels (Gaussian falloff with distance)
- * - Depth sigma = 0.1 (normalized 0-1, controls edge sensitivity)
- * - 5×5 kernel (±2 pixels in each direction)
- *
- * Runs once per depth frame change (~5fps via FBO), not per display frame.
- */
-const BILATERAL_FRAGMENT_SHADER = /* glsl */ `#version 300 es
-  precision highp float;
-
-  // BILATERAL_RADIUS is injected as a #define at compile time.
-  // Radius 2 → 5×5 kernel (high/medium), radius 1 → 3×3 kernel (low).
-
-  uniform sampler2D uRawDepth;
-  uniform vec2 uTexelSize;
-  uniform float uSpatialSigma2;
-
-  in vec2 vUv;
-  out vec4 fragColor;
-
-  void main() {
-    const float depthSigma2 = 0.01;    // 0.1^2
-
-    float center = texture(uRawDepth, vUv).r;
-    float totalWeight = 1.0;
-    float totalDepth = center;
-
-    for (int dy = -BILATERAL_RADIUS; dy <= BILATERAL_RADIUS; dy++) {
-      for (int dx = -BILATERAL_RADIUS; dx <= BILATERAL_RADIUS; dx++) {
-        if (dx == 0 && dy == 0) continue;
-
-        vec2 offset = vec2(float(dx), float(dy)) * uTexelSize;
-        float neighbor = texture(uRawDepth, vUv + offset).r;
-
-        float spatialDist2 = float(dx * dx + dy * dy);
-        float depthDiff = neighbor - center;
-        float w = exp(-spatialDist2 / uSpatialSigma2 - (depthDiff * depthDiff) / depthSigma2);
-
-        totalWeight += w;
-        totalDepth += neighbor * w;
-      }
-    }
-
-    fragColor = vec4(totalDepth / totalWeight, 0.0, 0.0, 1.0);
-  }
-`;
-
-/**
- * Fragment shader — per-pixel depth-based parallax displacement.
- *
- * Two modes are available, controlled by the uPomEnabled uniform:
- *
- * ### Basic displacement (uPomEnabled = false)
- *
- * For each fragment, the shader reads the depth value at the current
- * UV, inverts it (so near = high displacement, far = low), multiplies
- * by the parallax strength and input offset, then samples the video
- * texture at the displaced UV. This is fast (2 texture lookups) but
- * does not handle occlusion — foreground objects won't cover
- * background when the viewpoint shifts.
- *
- * ### Parallax Occlusion Mapping (uPomEnabled = true)
- *
- * A ray is marched through the depth field starting at the fragment's
- * UV. At each step, the shader advances along the input offset
- * direction and compares the accumulated "layer depth" against the
- * actual depth from the map. When the ray crosses below the depth
- * surface, it has found the intersection — the shader then
- * interpolates between the last two samples for a smooth result.
- *
- * This correctly handles self-occlusion: when the viewpoint shifts,
- * near objects occlude far objects behind them. The cost is
- * uPomSteps texture lookups per fragment (typically 16-32).
- *
- * ### Depth convention
- *
- * Depth Anything v2 produces: 0 = near, 1 = far (after normalization).
- * For parallax, we invert this so near pixels get maximum displacement.
- */
-const FRAGMENT_SHADER = /* glsl */ `#version 300 es
-  precision highp float;
-
-  // ---- Uniforms ----
-
-  /** Color video frame, uploaded from HTMLVideoElement. */
-  uniform sampler2D uImage;
-
-  /**
-   * Single-channel depth map (R channel, 0=near, 1=far).
-   * Bilateral-filtered on the GPU via a dedicated render pass,
-   * so a single texture() read gives smooth, edge-preserving depth.
-   */
-  uniform sampler2D uDepth;
-
-  /**
-   * Current parallax input from mouse or gyroscope.
-   * Range [-1, 1] for both x (horizontal) and y (vertical).
-   */
-  uniform vec2 uOffset;
-
-  /** Parallax displacement magnitude in UV space (e.g. 0.05 = 5%). */
-  uniform float uStrength;
-
-  /** Whether to use POM ray-marching instead of basic displacement. */
-  uniform bool uPomEnabled;
-
-  /** Number of ray-march steps for POM (runtime-adjustable). */
-  uniform int uPomSteps;
-
-  /** Smoothstep lower bound for depth contrast curve (depth-adaptive). */
-  uniform float uContrastLow;
-
-  /** Smoothstep upper bound for depth contrast curve (depth-adaptive). */
-  uniform float uContrastHigh;
-
-  /** Y-axis displacement multiplier (depth-adaptive). */
-  uniform float uVerticalReduction;
-
-  /** Depth threshold where DOF blur ramp begins (depth-adaptive). */
-  uniform float uDofStart;
-
-  /** Maximum DOF blur blend factor (depth-adaptive). */
-  uniform float uDofStrength;
-
-  /**
-   * Texel size for video/image texture (1.0 / videoResolution).
-   * Used by the depth-of-field effect to sample neighboring pixels.
-   */
-  uniform vec2 uImageTexelSize;
-
-  // ---- Varyings ----
-
-  /** Interpolated texture coordinates from vertex shader (cover-fit transformed). */
-  in vec2 vUv;
-
-  /** Screen-space UV [0,1] — always covers the full viewport. */
-  in vec2 vScreenUv;
-
-  /** Fragment output color. */
-  out vec4 fragColor;
-
-  // ---- Helper functions ----
-
-  /**
-   * Compute an edge fade factor that reduces displacement near UV
-   * boundaries.
-   */
-  float edgeFade(vec2 uv) {
-    float margin = uStrength * 1.5;
-    float fadeX = smoothstep(0.0, margin, uv.x) * smoothstep(0.0, margin, 1.0 - uv.x);
-    float fadeY = smoothstep(0.0, margin, uv.y) * smoothstep(0.0, margin, 1.0 - uv.y);
-    return fadeX * fadeY;
-  }
-
-  /**
-   * Compute a subtle vignette darkening factor.
-   */
-  float vignette(vec2 uv) {
-    float dist = length(uv - 0.5) * 1.4;
-    return 1.0 - pow(dist, 2.5);
-  }
-
-  // ---- Displacement functions ----
-
-  /**
-   * Basic UV displacement with edge fade.
-   */
-  vec2 basicDisplace(vec2 uv) {
-    float depth = texture(uDepth, uv).r;
-    depth = smoothstep(uContrastLow, uContrastHigh, depth);
-    float displacement = (1.0 - depth) * uStrength;
-    displacement *= edgeFade(uv);
-    vec2 offset = uOffset * displacement;
-    offset.y *= uVerticalReduction;
-    return uv + offset;
-  }
-
-  /**
-   * Parallax Occlusion Mapping (POM) ray-marching displacement.
-   */
-  vec2 pomDisplace(vec2 uv) {
-    float layerDepth = 1.0 / float(uPomSteps);
-
-    vec2 scaledOffset = uOffset;
-    scaledOffset.y *= uVerticalReduction;
-
-    vec2 deltaUV = scaledOffset * uStrength / float(uPomSteps);
-
-    float currentLayerDepth = 0.0;
-    vec2 currentUV = uv;
-
-    float fade = edgeFade(uv);
-
-    for (int i = 0; i < MAX_POM_STEPS; i++) {
-      if (i >= uPomSteps) break;
-
-      float rawDepth = texture(uDepth, currentUV).r;
-      rawDepth = smoothstep(uContrastLow, uContrastHigh, rawDepth);
-      float depthAtUV = 1.0 - rawDepth;
-
-      if (currentLayerDepth > depthAtUV) {
-        vec2 prevUV = currentUV - deltaUV;
-        float prevLayerDepth = currentLayerDepth - layerDepth;
-        float prevRaw = texture(uDepth, prevUV).r;
-        prevRaw = smoothstep(uContrastLow, uContrastHigh, prevRaw);
-        float prevDepthAtUV = 1.0 - prevRaw;
-
-        float afterDepth = depthAtUV - currentLayerDepth;
-        float beforeDepth = prevDepthAtUV - prevLayerDepth;
-        float t = afterDepth / (afterDepth - beforeDepth);
-
-        vec2 hitUV = mix(currentUV, prevUV, t);
-        return mix(uv, hitUV, fade);
-      }
-
-      currentUV += deltaUV;
-      currentLayerDepth += layerDepth;
-    }
-
-    return mix(uv, currentUV, fade);
-  }
-
-  // ---- Main ----
-
-  void main() {
-    vec2 displaced = uPomEnabled ? pomDisplace(vUv) : basicDisplace(vUv);
-    displaced = clamp(displaced, vec2(0.0), vec2(1.0));
-
-    vec4 color = texture(uImage, displaced);
-
-    // Depth-of-field hint
-    float dofDepth = texture(uDepth, displaced).r;
-    float dof = smoothstep(uDofStart, 1.0, dofDepth) * uDofStrength;
-    vec4 blurred = (
-      texture(uImage, displaced + vec2( uImageTexelSize.x,  0.0)) +
-      texture(uImage, displaced + vec2(-uImageTexelSize.x,  0.0)) +
-      texture(uImage, displaced + vec2( 0.0,  uImageTexelSize.y)) +
-      texture(uImage, displaced + vec2( 0.0, -uImageTexelSize.y))
-    ) * 0.25;
-    color = mix(color, blurred, dof);
-
-    // Vignette (screen-space, not texture-space)
-    color.rgb *= vignette(vScreenUv);
-
-    fragColor = color;
-  }
-`;
+import VERTEX_SHADER from './shaders/parallax/vertex.vert.glsl?raw';
+import BILATERAL_VERTEX_SHADER from './shaders/parallax/bilateral.vert.glsl?raw';
+import BILATERAL_FRAGMENT_SHADER from './shaders/parallax/bilateral.frag.glsl?raw';
+import FRAGMENT_SHADER from './shaders/parallax/fragment.frag.glsl?raw';
 
 // ---------------------------------------------------------------------------
 // Configuration interface
@@ -676,15 +380,10 @@ function createParallaxPass(
 // Renderer class
 // ---------------------------------------------------------------------------
 
-export class ParallaxRenderer {
-  /** Debounce delay for resize events to avoid layout thrashing. */
-  private static readonly RESIZE_DEBOUNCE_MS = 100;
-
+export class ParallaxRenderer extends RendererBase {
   // ---- Shared GPU resources ----
-  private readonly canvas: HTMLCanvasElement;
   private gl: WebGL2RenderingContext | null = null;
   private quadVao: WebGLVertexArrayObject | null = null;
-  private readonly container: HTMLElement;
 
   // ---- Render passes ----
   private bilateralPass: BilateralFilterPass | null = null;
@@ -696,50 +395,8 @@ export class ParallaxRenderer {
   private readonly filteredDepthSlot: TextureSlot;
   private readonly rawDepthSlot: TextureSlot;
 
-  // ---- Depth data dimensions ----
-  /** GPU texture dimensions (may be clamped by quality tier). */
-  private depthWidth = 0;
-  private depthHeight = 0;
-  /** Original source depth dimensions (from precomputed data). */
-  private sourceDepthWidth = 0;
-  private sourceDepthHeight = 0;
-  /** Reusable buffer for subsampling depth data when GPU dims < source dims. */
-  private depthSubsampleBuffer: Uint8Array | null = null;
-
-  // ---- Video dimensions (for cover-fit calculation) ----
-  private videoAspect = 16 / 9;
-
-  // ---- Callbacks ----
-  private readDepth: ((timeSec: number) => Uint8Array) | null = null;
-  private readInput: (() => ParallaxInput) | null = null;
-  private playbackVideo: HTMLVideoElement | null = null;
-
-  /**
-   * Optional callback invoked on each new video frame (from RVFC).
-   * The Web Component uses this to dispatch the 'layershift-parallax:frame' event.
-   */
-  private onVideoFrame: ((currentTime: number, frameNumber: number) => void) | null = null;
-
-  // ---- Animation & resize ----
-  private animationFrameHandle = 0;
-
-  /** requestVideoFrameCallback handle (0 = inactive). */
-  private rvfcHandle = 0;
-
-  /** Whether RVFC is supported on the current video element. */
-  private rvfcSupported = false;
-  private resizeObserver: ResizeObserver | null = null;
-  private resizeTimer: number | null = null;
-
-  // ---- UV transform for cover-fit + overscan ----
-  private uvOffset = [0, 0];
-  private uvScale = [1, 1];
-
   /** Resolved config with all optional shader params filled from defaults. */
   private readonly config: ResolvedParallaxRendererConfig;
-
-  /** Adaptive quality parameters resolved at construction time. */
-  private readonly qualityParams: QualityParams;
 
   /**
    * Create the renderer and attach its canvas to the DOM.
@@ -753,7 +410,7 @@ export class ParallaxRenderer {
     parent: HTMLElement,
     config: ParallaxRendererConfig
   ) {
-    this.container = parent;
+    super(parent);
 
     // Register texture slots at init time — cached references used in hot path.
     // Unit numbers: video=0, filteredDepth=1, rawDepth=2
@@ -774,8 +431,7 @@ export class ParallaxRenderer {
       dofStrength: config.dofStrength ?? SHADER_PARAM_DEFAULTS.dofStrength,
     };
 
-    // Create the canvas and WebGL 2 context.
-    this.canvas = document.createElement('canvas');
+    // Create the WebGL 2 context.
     const gl = this.canvas.getContext('webgl2', {
       antialias: false,
       alpha: false,
@@ -800,13 +456,8 @@ export class ParallaxRenderer {
     // which avoids pixel storage state changes that stall mobile GPU pipelines.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
-    this.container.appendChild(this.canvas);
     this.initGPUResources();
     this.setupResizeHandling();
-
-    // Handle context loss and restoration.
-    this.canvas.addEventListener('webglcontextlost', this.handleContextLost);
-    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
   }
 
   /**
@@ -828,30 +479,8 @@ export class ParallaxRenderer {
 
     this.videoAspect = video.videoWidth / video.videoHeight;
 
-    // Store source depth dimensions (original precomputed data).
-    this.sourceDepthWidth = depthWidth;
-    this.sourceDepthHeight = depthHeight;
-
     // Clamp depth dimensions to the quality tier's maximum.
-    // On low-end devices, a 512×512 depth map is downscaled to 256×256
-    // to reduce texture memory and bilateral filter work.
-    const maxDim = this.qualityParams.depthMaxDim;
-    let gpuDepthWidth = depthWidth;
-    let gpuDepthHeight = depthHeight;
-    if (gpuDepthWidth > maxDim || gpuDepthHeight > maxDim) {
-      const scale = maxDim / Math.max(gpuDepthWidth, gpuDepthHeight);
-      gpuDepthWidth = Math.max(1, Math.round(gpuDepthWidth * scale));
-      gpuDepthHeight = Math.max(1, Math.round(gpuDepthHeight * scale));
-    }
-    this.depthWidth = gpuDepthWidth;
-    this.depthHeight = gpuDepthHeight;
-
-    // Allocate subsample buffer if GPU dimensions differ from source.
-    if (gpuDepthWidth !== depthWidth || gpuDepthHeight !== depthHeight) {
-      this.depthSubsampleBuffer = new Uint8Array(gpuDepthWidth * gpuDepthHeight);
-    } else {
-      this.depthSubsampleBuffer = null;
-    }
+    this.clampDepthDimensions(depthWidth, depthHeight, this.qualityParams.depthMaxDim);
 
     // --- Video texture (via TextureRegistry, unit 0) ---
     this.videoSlot.texture = gl.createTexture();
@@ -899,90 +528,6 @@ export class ParallaxRenderer {
     this.recalculateViewportLayout();
   }
 
-  /**
-   * Begin the render loop.
-   *
-   * When `requestVideoFrameCallback` is available, two loops run:
-   * 1. RVFC loop — fires once per new video frame, handles depth update.
-   * 2. RAF loop — fires at display refresh rate, handles input + render.
-   *
-   * When RVFC is not available, falls back to a single RAF loop that
-   * does everything (the pre-RVFC behavior).
-   */
-  start(
-    video: HTMLVideoElement,
-    readDepth: (timeSec: number) => Uint8Array,
-    readInput: () => ParallaxInput,
-    onVideoFrame?: (currentTime: number, frameNumber: number) => void
-  ): void {
-    this.stop();
-
-    this.playbackVideo = video;
-    this.readDepth = readDepth;
-    this.readInput = readInput;
-    this.onVideoFrame = onVideoFrame ?? null;
-
-    // Feature-detect RVFC on this specific video element.
-    this.rvfcSupported = ParallaxRenderer.isRVFCSupported();
-
-    // Start the RVFC loop for depth updates (only when supported).
-    if (this.rvfcSupported) {
-      this.rvfcHandle = video.requestVideoFrameCallback(this.videoFrameLoop);
-    }
-
-    // Always start the RAF loop for input + rendering.
-    this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
-  }
-
-  /** Stop both render loops and release callbacks. */
-  stop(): void {
-    if (this.animationFrameHandle) {
-      window.cancelAnimationFrame(this.animationFrameHandle);
-      this.animationFrameHandle = 0;
-    }
-
-    // Cancel the RVFC loop if active.
-    if (this.rvfcHandle && this.playbackVideo) {
-      this.playbackVideo.cancelVideoFrameCallback(this.rvfcHandle);
-      this.rvfcHandle = 0;
-    }
-
-    this.playbackVideo = null;
-    this.readDepth = null;
-    this.readInput = null;
-    this.onVideoFrame = null;
-    this.rvfcSupported = false;
-  }
-
-  /** Stop rendering and release all GPU resources. */
-  dispose(): void {
-    this.stop();
-    this.disposeTextures();
-    this.disposeGPUResources();
-
-    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
-    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
-
-    // Explicitly release the WebGL context to free GPU resources.
-    // Without this, contexts leak until the canvas is garbage collected.
-    if (this.gl) {
-      const ext = this.gl.getExtension('WEBGL_lose_context');
-      ext?.loseContext();
-      this.gl = null;
-    }
-    this.canvas.remove();
-
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
-    window.removeEventListener('resize', this.scheduleResizeRecalculate);
-    if (this.resizeTimer !== null) {
-      window.clearTimeout(this.resizeTimer);
-      this.resizeTimer = null;
-    }
-  }
-
   // -----------------------------------------------------------------------
   // GPU resource initialization
   // -----------------------------------------------------------------------
@@ -1012,48 +557,7 @@ export class ParallaxRenderer {
   }
 
   // -----------------------------------------------------------------------
-  // RVFC feature detection
-  // -----------------------------------------------------------------------
-
-  /** Check whether requestVideoFrameCallback is available. */
-  private static isRVFCSupported(): boolean {
-    return 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-  }
-
-  // -----------------------------------------------------------------------
-  // Video frame loop (RVFC) — depth updates at video frame rate
-  // -----------------------------------------------------------------------
-
-  /**
-   * RVFC callback — fires only when the browser presents a new video frame.
-   *
-   * Handles the depth texture upload and bilateral filter pass, which
-   * only needs to happen when the video frame actually changes
-   * (~24-30fps, not 60-120fps).
-   */
-  private readonly videoFrameLoop = (
-    _now: DOMHighResTimeStamp,
-    metadata: VideoFrameCallbackMetadata
-  ) => {
-    const video = this.playbackVideo;
-    if (!video) return;
-
-    // Re-register for the next frame immediately.
-    this.rvfcHandle = video.requestVideoFrameCallback(this.videoFrameLoop);
-
-    const timeSec = metadata.mediaTime ?? video.currentTime;
-
-    // Upload raw depth and run bilateral filter pass.
-    this.updateDepthTexture(timeSec);
-
-    // Notify consumer (Web Component uses this for the 'frame' event).
-    if (this.onVideoFrame) {
-      this.onVideoFrame(timeSec, metadata.presentedFrames ?? 0);
-    }
-  };
-
-  // -----------------------------------------------------------------------
-  // Render loop (RAF) — input + render at display refresh rate
+  // Abstract method implementations
   // -----------------------------------------------------------------------
 
   /**
@@ -1067,9 +571,7 @@ export class ParallaxRenderer {
    * When RVFC is NOT supported, this falls back to the original behavior:
    * depth update + input update + render all in a single RAF tick.
    */
-  private readonly renderLoop = () => {
-    this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
-
+  protected onRenderFrame(): void {
     const gl = this.gl;
     const video = this.playbackVideo;
     if (!gl || !this.parallaxPass || !this.quadVao) {
@@ -1093,7 +595,7 @@ export class ParallaxRenderer {
 
     // Fallback: when RVFC is not supported, do depth update here.
     if (!this.rvfcSupported) {
-      this.updateDepthTexture(video.currentTime);
+      this.onDepthUpdate(video.currentTime);
     }
 
     // Update the parallax offset from mouse/gyro input — always at RAF rate.
@@ -1107,7 +609,7 @@ export class ParallaxRenderer {
     // Draw the fullscreen quad (reads filtered depth from TEXTURE_UNIT 1).
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  };
+  }
 
   /**
    * Upload raw depth data to the GPU and run the bilateral filter pass.
@@ -1117,34 +619,14 @@ export class ParallaxRenderer {
    *
    * The parallax shader reads from filteredDepthTexture (UNIT 1).
    */
-  private updateDepthTexture(timeSec: number): void {
+  protected onDepthUpdate(timeSec: number): void {
     const gl = this.gl;
     if (
       !gl || !this.readDepth ||
       !this.rawDepthSlot.texture || !this.bilateralPass
     ) return;
 
-    let depthData = this.readDepth(timeSec);
-
-    // Subsample if GPU texture is smaller than source depth data.
-    // Nearest-neighbor sampling every Nth pixel — bilinear interpolation
-    // is handled by GL_LINEAR on the texture itself.
-    if (this.depthSubsampleBuffer) {
-      const buf = this.depthSubsampleBuffer;
-      const srcW = this.sourceDepthWidth;
-      const dstW = this.depthWidth;
-      const dstH = this.depthHeight;
-      for (let y = 0; y < dstH; y++) {
-        const srcY = Math.min(Math.round(y * srcW / dstW), this.sourceDepthHeight - 1);
-        const srcRowOffset = srcY * srcW;
-        const dstRowOffset = y * dstW;
-        for (let x = 0; x < dstW; x++) {
-          const srcX = Math.min(Math.round(x * srcW / dstW), srcW - 1);
-          buf[dstRowOffset + x] = depthData[srcRowOffset + srcX];
-        }
-      }
-      depthData = buf;
-    }
+    const depthData = this.subsampleDepth(this.readDepth(timeSec));
 
     this.bilateralPass.execute(
       gl,
@@ -1158,37 +640,6 @@ export class ParallaxRenderer {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // Resize handling
-  // -----------------------------------------------------------------------
-
-  /**
-   * Set up a ResizeObserver on the container element and a fallback
-   * window resize listener.
-   */
-  private setupResizeHandling(): void {
-    if (typeof ResizeObserver !== 'undefined') {
-      this.resizeObserver = new ResizeObserver(() => {
-        this.scheduleResizeRecalculate();
-      });
-      this.resizeObserver.observe(this.container);
-    }
-
-    window.addEventListener('resize', this.scheduleResizeRecalculate);
-    this.recalculateViewportLayout();
-  }
-
-  /** Debounce resize events to avoid expensive layout recalculations. */
-  private readonly scheduleResizeRecalculate = () => {
-    if (this.resizeTimer !== null) {
-      window.clearTimeout(this.resizeTimer);
-    }
-    this.resizeTimer = window.setTimeout(() => {
-      this.resizeTimer = null;
-      this.recalculateViewportLayout();
-    }, ParallaxRenderer.RESIZE_DEBOUNCE_MS);
-  };
-
   /**
    * Recalculate the WebGL canvas size and UV transform to match the
    * current container dimensions.
@@ -1196,7 +647,7 @@ export class ParallaxRenderer {
    * Cover-fit + overscan is expressed as a UV-space transform (offset + scale)
    * rather than geometry resize. The fullscreen quad stays fixed at -1 to 1.
    */
-  private recalculateViewportLayout(): void {
+  protected recalculateViewportLayout(): void {
     const gl = this.gl;
     if (!gl) return;
 
@@ -1214,35 +665,7 @@ export class ParallaxRenderer {
     }
 
     // Compute cover-fit UV transform.
-    // The video fills the viewport (cover-fit), and overscan adds extra
-    // visible area so parallax displacement doesn't reveal edges.
-    //
-    // In UV space, scale < 1 means we sample a SUBSET of the texture
-    // (zooming in / cropping). For cover-fit, the limiting axis maps 1:1
-    // and the overflowing axis is cropped (scale < 1).
-    const viewportAspect = width / height;
-    const extra = this.config.parallaxStrength + this.config.overscanPadding;
-
-    let scaleU = 1.0;
-    let scaleV = 1.0;
-
-    if (viewportAspect > this.videoAspect) {
-      // Viewport is wider — match width, crop top/bottom
-      scaleV = this.videoAspect / viewportAspect;
-    } else {
-      // Viewport is taller — match height, crop left/right
-      scaleU = viewportAspect / this.videoAspect;
-    }
-
-    // Apply overscan: zoom in further so parallax displacement doesn't
-    // reveal texture edges. Dividing reduces the UV range (more zoom).
-    const overscanScale = 1.0 + extra * 2;
-    scaleU /= overscanScale;
-    scaleV /= overscanScale;
-
-    // Center the UV mapping: offset = (1 - scale) / 2
-    this.uvOffset = [(1.0 - scaleU) / 2.0, (1.0 - scaleV) / 2.0];
-    this.uvScale = [scaleU, scaleV];
+    this.computeCoverFitUV(this.config.parallaxStrength, this.config.overscanPadding);
 
     // Update the UV transform uniforms via the parallax pass.
     if (this.parallaxPass) {
@@ -1250,28 +673,21 @@ export class ParallaxRenderer {
     }
   }
 
-  /** Read the container's pixel dimensions, with a minimum of 1x1. */
-  private getViewportSize(): { width: number; height: number } {
-    const width = Math.max(1, Math.round(this.container.clientWidth || window.innerWidth));
-    const height = Math.max(1, Math.round(this.container.clientHeight || window.innerHeight));
-    return { width, height };
+  /** Release all GPU resources. */
+  protected disposeRenderer(): void {
+    this.disposeTextures();
+    this.disposeGPUResources();
+
+    // Explicitly release the WebGL context to free GPU resources.
+    if (this.gl) {
+      const ext = this.gl.getExtension('WEBGL_lose_context');
+      ext?.loseContext();
+      this.gl = null;
+    }
   }
 
-  // -----------------------------------------------------------------------
-  // Context loss handling
-  // -----------------------------------------------------------------------
-
-  private readonly handleContextLost = (event: Event) => {
-    event.preventDefault();
-    // Stop the render loop — GPU resources are invalid.
-    if (this.animationFrameHandle) {
-      window.cancelAnimationFrame(this.animationFrameHandle);
-      this.animationFrameHandle = 0;
-    }
-  };
-
-  private readonly handleContextRestored = () => {
-    // Re-acquire the context and rebuild all GPU resources.
+  /** Rebuild GPU state after context restoration. */
+  protected onContextRestored(): void {
     const gl = this.canvas.getContext('webgl2');
     if (!gl) return;
     this.gl = gl;
@@ -1287,9 +703,9 @@ export class ParallaxRenderer {
 
     // Restart the render loop.
     if (this.playbackVideo) {
-      this.animationFrameHandle = window.requestAnimationFrame(this.renderLoop);
+      this.animationFrameHandle = window.requestAnimationFrame(() => this.onRenderFrame());
     }
-  };
+  }
 
   // -----------------------------------------------------------------------
   // Cleanup
