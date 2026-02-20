@@ -152,13 +152,13 @@ export function createNearestSampler(device: GPUDevice): GPUSampler {
 export function importImageSource(
   device: GPUDevice,
   texture: GPUTexture,
-  source: CanvasImageSource,
+  source: GPUCopyExternalImageSource,
   width: number,
   height: number,
   flipY = true,
 ): void {
   device.queue.copyExternalImageToTexture(
-    { source: source as ImageBitmapSource, flipY },
+    { source, flipY },
     { texture },
     [width, height],
   );

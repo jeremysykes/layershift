@@ -12,6 +12,19 @@
 
 export type MediaSourceType = 'video' | 'image' | 'camera';
 
+/**
+ * Texture-uploadable image source — the subset of CanvasImageSource that
+ * is accepted by both WebGL texImage2D and WebGPU copyExternalImageToTexture.
+ * Excludes SVGImageElement which neither API supports.
+ */
+export type TextureImageSource =
+  | HTMLCanvasElement
+  | HTMLImageElement
+  | HTMLVideoElement
+  | ImageBitmap
+  | OffscreenCanvas
+  | VideoFrame;
+
 export interface MediaSource {
   readonly type: MediaSourceType;
   readonly width: number;
@@ -21,7 +34,7 @@ export interface MediaSource {
   readonly isLive: boolean;
 
   /** Return the underlying element suitable for texImage2D / copyExternalImageToTexture. */
-  getImageSource(): CanvasImageSource | null;
+  getImageSource(): TextureImageSource | null;
 
   requestVideoFrameCallback?(cb: (now: number, metadata: VideoFrameCallbackMetadata) => void): number;
   cancelVideoFrameCallback?(handle: number): void;
@@ -92,7 +105,7 @@ class VideoSourceImpl implements MediaSource {
   get height(): number { return this.video.videoHeight; }
   get currentTime(): number { return this.video.currentTime; }
 
-  getImageSource(): CanvasImageSource | null {
+  getImageSource(): TextureImageSource | null {
     if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
     return this.video;
   }
@@ -165,7 +178,7 @@ class ImageSourceImpl implements MediaSource {
   get width(): number { return this.img.naturalWidth; }
   get height(): number { return this.img.naturalHeight; }
 
-  getImageSource(): CanvasImageSource { return this.img; }
+  getImageSource(): TextureImageSource { return this.img; }
 
   dispose(): void {
     this.img.removeAttribute('src');
@@ -222,7 +235,7 @@ class CameraSourceImpl implements MediaSource {
   get height(): number { return this.video.videoHeight; }
   get currentTime(): number { return this.video.currentTime; }
 
-  getImageSource(): CanvasImageSource | null {
+  getImageSource(): TextureImageSource | null {
     if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
     return this.video;
   }
