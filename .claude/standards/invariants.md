@@ -30,6 +30,8 @@ Source of truth: `docs/parallax/depth-derivation-rules.md`
 1. **Each effect is a self-contained Web Component.** Effects ship as `<layershift-*>` custom elements.
 2. **Shared infrastructure is reused, not duplicated.** Depth system, input handling, video loading are common across effects.
 3. **Build outputs are deterministic.** Same source always produces same bundles.
+4. **No inline shaders.** All GLSL and WGSL shader source must live in external files under `src/shaders/` and be imported via Vite `?raw` (GLSL) or `?raw` (WGSL). No template literal shader strings in renderer TypeScript files.
+5. **WebGPU/WebGL2 backend parity.** Both GPU backends must produce visually identical output for the same input. WebGPU is preferred when available; WebGL2 is the silent fallback.
 
 ## Modification Protocol
 

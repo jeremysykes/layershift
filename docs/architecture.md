@@ -2,11 +2,13 @@
 
 ## Overview
 
-Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via WebGL 2. Effects are embeddable in any framework or plain HTML as a single IIFE bundle with zero runtime dependencies.
+Layershift is a video effects library. Each effect ships as a self-contained Web Component backed by GPU-accelerated rendering via WebGPU (preferred) or WebGL 2 (fallback). The GPU backend is selected automatically at runtime based on browser support. Effects are embeddable in any framework or plain HTML as a single IIFE bundle with zero runtime dependencies.
 
 **Parallax** (`<layershift-parallax>`) is the first effect — depth-aware parallax motion driven by mouse or gyroscope input using precomputed depth maps.
 
-**Portal** (`<layershift-portal>`) is the second effect — video revealed through an SVG-shaped cutout with depth-aware parallax, dimensional typography (JFA distance field, bevel lighting, geometric chamfer with Blinn-Phong shading, emissive interior), and depth-reactive boundary effects. Uses a multi-pass WebGL 2 stencil + FBO compositing pipeline.
+**Portal** (`<layershift-portal>`) is the second effect — video revealed through an SVG-shaped cutout with depth-aware parallax, dimensional typography (JFA distance field, bevel lighting, geometric chamfer with Blinn-Phong shading, emissive interior), and depth-reactive boundary effects. Uses a multi-pass stencil + FBO compositing pipeline.
+
+Both effects support dual GPU backends: **WebGPU** (preferred) and **WebGL 2** (fallback). Runtime feature detection in `gpu-backend.ts` selects the optimal backend automatically. Each renderer extends a shared `RendererBase` abstract class that provides common resize, UV, loop, and depth subsample logic. See [ADR-013](./adr/ADR-013-webgpu-renderer-path.md) for the design rationale.
 
 Both effects share core infrastructure (input handling, video loading, depth system, build pipeline).
 
@@ -37,11 +39,18 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 
 | File | Scope | Purpose |
 |------|-------|---------|
-| `parallax-renderer.ts` | Parallax | WebGL 2 renderer with multi-pass architecture: bilateral filter pass + parallax pass, each a self-contained factory-created unit sharing a single fullscreen quad VAO |
-| `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects) |
-| `render-pass.ts` | Shared | Render pass framework: `RenderPass`, `FBOPass`, `TextureRegistry`, `createPass()`, `createFBOPass()`, `createMRTPass()` — used by both renderers |
-| `quality.ts` | Shared | Adaptive quality scaling: device probing, tier classification (high/medium/low), concrete parameter resolution — used by both renderers |
-| `webgl-utils.ts` | Shared | WebGL 2 helpers: `compileShader()`, `linkProgram()`, `getUniformLocations()`, `createFullscreenQuadVao()` — used by both renderers |
+| `renderer-base.ts` | Shared | Abstract base class for renderers — shared resize handling, UV computation, RAF/RVFC dual-loop registration, depth subsample logic |
+| `gpu-backend.ts` | Shared | GPU backend feature detection — probes for WebGPU support, falls back to WebGL 2, exposes selected backend type to element components |
+| `parallax-renderer.ts` | Parallax | WebGL 2 parallax renderer with multi-pass architecture: bilateral filter pass + parallax pass, each a self-contained factory-created unit sharing a single fullscreen quad VAO. Extends `RendererBase` |
+| `parallax-renderer-webgpu.ts` | Parallax | WebGPU parallax renderer — equivalent pipeline to WebGL 2 version using compute/render passes and bind groups. Extends `RendererBase` |
+| `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects). Extends `RendererBase` |
+| `portal-renderer-webgpu.ts` | Portal | WebGPU portal renderer — equivalent multi-pass pipeline using WebGPU render/compute passes, bind groups, and storage textures. Extends `RendererBase` |
+| `render-pass.ts` | Shared (WebGL 2) | WebGL 2 render pass framework: `RenderPass`, `FBOPass`, `TextureRegistry`, `createPass()`, `createFBOPass()`, `createMRTPass()` |
+| `render-pass-webgpu.ts` | Shared (WebGPU) | WebGPU render pass framework: equivalent abstractions to `render-pass.ts` for WebGPU render and compute passes |
+| `quality.ts` | Shared | Adaptive quality scaling: device probing, tier classification (high/medium/low), concrete parameter resolution — used by all renderers |
+| `webgl-utils.ts` | Shared (WebGL 2) | WebGL 2 helpers: `compileShader()`, `linkProgram()`, `getUniformLocations()`, `createFullscreenQuadVao()` |
+| `webgpu-utils.ts` | Shared (WebGPU) | WebGPU helpers: pipeline creation, bind group layout, buffer allocation, texture creation |
+| `jfa-distance-field.ts` | Shared | JFA distance field orchestration — extracted from portal renderer for reuse across backends and effects |
 | `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, keyframe interpolation |
@@ -51,6 +60,14 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | `main.ts` | Demo | Demo app entry point |
 | `ui.ts` | Demo | Loading overlay UI |
 | `site/main.ts` | Demo | Landing page logic |
+
+### Shader Sources (`src/shaders/`)
+
+| Path | Scope | Purpose |
+|------|-------|---------|
+| `shaders/parallax/*.wgsl` (4 files) | Parallax (WebGPU) | WGSL parallax shaders — bilateral filter, parallax displacement, DOF, contrast |
+| `shaders/portal/*.wgsl` (9 files) | Portal (WebGPU) | WGSL portal shaders — interior, stencil, mask, JFA (seed/flood/distance), composite, chamfer, boundary |
+| `shaders/portal/*.glsl` (18 files) | Portal (WebGL 2) | Extracted GLSL portal shaders — previously inlined, now individual files for maintainability |
 
 ### Site Components (`src/site/components/`)
 
@@ -83,8 +100,9 @@ See [parallax initialization diagram](./diagrams/parallax-initialization.md) for
 3. **Parameter derivation** (sync, O(1)): continuous functions mapping depth statistics to shader parameters
 4. **Config merge**: explicit > derived > calibrated defaults
 5. **Depth interpolator**: synchronous keyframe interpolation on main thread
-6. **Renderer setup**: WebGL 2 render passes (bilateral filter + parallax, each via factory function), shared fullscreen quad VAO, textures, bilateral filter FBO, uniforms set once
-7. **Render loop start**: RAF + RVFC registration
+6. **Backend detection**: `gpu-backend.ts` probes for WebGPU support; selects WebGPU or WebGL 2
+7. **Renderer setup**: Instantiate backend-appropriate renderer (both extend `RendererBase`). WebGL 2: render passes via factory function, shared fullscreen quad VAO, textures, bilateral filter FBO, uniforms set once. WebGPU: render/compute pipelines, bind groups, storage textures
+8. **Render loop start**: RAF + RVFC registration (managed by `RendererBase`)
 
 ### Render Loop
 
@@ -132,8 +150,9 @@ See [portal initialization diagram](./diagrams/portal-initialization.md) for the
 
 1. **Asset loading** (parallel): video element + binary depth data + SVG mesh generation
 2. **Depth interpolator**: synchronous keyframe interpolation on main thread
-3. **Renderer setup**: WebGL 2 context (stencil: true), 8 shader programs, logo mesh VBO+IBO, edge mesh VBO, chamfer mesh VBO, FBO with MRT, JFA distance field textures
-4. **Render loop start**: RAF + RVFC registration
+3. **Backend detection**: `gpu-backend.ts` probes for WebGPU support; selects WebGPU or WebGL 2
+4. **Renderer setup**: Instantiate backend-appropriate renderer (both extend `RendererBase`). WebGL 2: context (stencil: true), 9 shader programs, logo mesh VBO+IBO, edge mesh VBO, chamfer mesh VBO, FBO with MRT, JFA distance field textures. WebGPU: equivalent pipelines using render/compute passes, bind groups, and storage textures
+5. **Render loop start**: RAF + RVFC registration (managed by `RendererBase`)
 
 ### Render Pipeline
 
@@ -179,7 +198,7 @@ Multi-pass stencil + FBO compositing (same dual-loop architecture as parallax):
 
 ### Element: `<layershift-parallax>`
 
-Shadow DOM encapsulates a `<canvas>` (WebGL 2) and hidden `<video>`.
+Shadow DOM encapsulates a `<canvas>` (WebGPU or WebGL 2, selected at runtime) and hidden `<video>`.
 
 **Observed attributes:**
 - `src`, `depth-src`, `depth-meta` (required asset paths)
@@ -201,7 +220,7 @@ Shadow DOM encapsulates a `<canvas>` (WebGL 2) and hidden `<video>`.
 
 ### Element: `<layershift-portal>`
 
-Shadow DOM encapsulates a `<canvas>` (WebGL 2 with stencil) and hidden `<video>`.
+Shadow DOM encapsulates a `<canvas>` (WebGPU or WebGL 2 with stencil, selected at runtime) and hidden `<video>`.
 
 **Observed attributes:**
 - `src`, `depth-src`, `depth-meta` (required asset paths)
@@ -297,7 +316,8 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | Depth texture upload frequency | ~5fps (keyframe rate) | ~5fps (keyframe rate) |
 | Depth texture size | 512x512 Uint8 (~256KB) | 512x512 Uint8 (~256KB) |
 | Bundle size IIFE (gzipped) | ~19KB | ~29KB (combined) |
-| Runtime dependencies | None (pure WebGL 2) | None (pure WebGL 2) |
+| Runtime dependencies | None (WebGPU or WebGL 2) | None (WebGPU or WebGL 2) |
+| GPU backend selection | Automatic (WebGPU preferred, WebGL 2 fallback) | Automatic (WebGPU preferred, WebGL 2 fallback) |
 
 ## Documentation Map
 
@@ -330,6 +350,7 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-010](./adr/ADR-010-multi-pass-renderer-architecture.md) | Multi-pass renderer architecture, shared WebGL utilities |
 | [ADR-011](./adr/ADR-011-shared-render-pass-framework.md) | Shared render pass framework for cross-effect compositing |
 | [ADR-012](./adr/ADR-012-adaptive-quality-scaling.md) | Adaptive quality scaling based on device capability |
+| [ADR-013](./adr/ADR-013-webgpu-renderer-path.md) | WebGPU renderer path with automatic backend selection |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |

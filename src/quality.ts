@@ -251,3 +251,66 @@ export function resolveQuality(
 
   return { tier, ...TIER_PARAMS[tier] };
 }
+
+// ---------------------------------------------------------------------------
+// WebGPU quality probing
+// ---------------------------------------------------------------------------
+
+/**
+ * Probe device capabilities from a WebGPU adapter.
+ *
+ * Extracts the same `DeviceCapabilities` shape as the WebGL2 probe,
+ * allowing the shared `classifyDevice()` scoring logic to work for both backends.
+ */
+export function probeCapabilitiesWebGPU(adapterInfo: GPUAdapterInfo): DeviceCapabilities {
+  const gpuRenderer = adapterInfo.description || adapterInfo.device || 'unknown';
+  const maxTextureSize = 8192; // conservative default; WebGPU guarantees >= 8192
+
+  const hardwareConcurrency = typeof navigator !== 'undefined'
+    ? (navigator.hardwareConcurrency || 0)
+    : 0;
+  const deviceMemory = typeof navigator !== 'undefined'
+    ? ((navigator as unknown as Record<string, unknown>).deviceMemory as number || 0)
+    : 0;
+  const devicePixelRatio = typeof window !== 'undefined'
+    ? (window.devicePixelRatio || 1)
+    : 1;
+
+  const screenPixels = typeof screen !== 'undefined'
+    ? (screen.width || 0) * (screen.height || 0)
+    : 0;
+
+  const hasTouch = typeof navigator !== 'undefined' && (
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0
+  );
+  const smallScreen = screenPixels > 0 && screenPixels < 1920 * 1080;
+  const isMobile = hasTouch && smallScreen;
+
+  return {
+    gpuRenderer,
+    maxTextureSize,
+    hardwareConcurrency,
+    deviceMemory,
+    devicePixelRatio,
+    screenPixels,
+    isMobile,
+  };
+}
+
+/**
+ * Resolve quality parameters for a WebGPU renderer.
+ *
+ * Same logic as `resolveQuality()` but accepts a `GPUAdapterInfo` instead
+ * of a WebGL context.
+ */
+export function resolveQualityWebGPU(
+  adapterInfo: GPUAdapterInfo,
+  quality?: 'auto' | QualityTier
+): QualityParams {
+  const tier = (quality && quality !== 'auto')
+    ? quality
+    : classifyDevice(probeCapabilitiesWebGPU(adapterInfo));
+
+  return { tier, ...TIER_PARAMS[tier] };
+}
