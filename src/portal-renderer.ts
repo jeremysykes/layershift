@@ -32,7 +32,9 @@
 
 import type { ParallaxInput } from './input-handler';
 import type { ShapeMesh } from './shape-generator';
-import { compileShader, linkProgram } from './webgl-utils';
+import { compileShader, linkProgram, getUniformLocations, createFullscreenQuadVao } from './webgl-utils';
+import type { RenderPass, TextureSlot } from './render-pass';
+import { createPass, TextureRegistry } from './render-pass';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders
@@ -686,7 +688,7 @@ export interface PortalRendererConfig {
   lightDirection: [number, number, number];
 }
 
-// WebGL helpers (compileShader, linkProgram) imported from webgl-utils.ts
+// WebGL helpers imported from webgl-utils.ts; render pass framework from render-pass.ts
 
 // ---------------------------------------------------------------------------
 // Edge mesh generation
@@ -885,27 +887,16 @@ export class PortalRenderer {
   private gl: WebGL2RenderingContext | null = null;
   private readonly container: HTMLElement;
 
-  // Shader programs
-  private stencilProgram: WebGLProgram | null = null;
-  private maskProgram: WebGLProgram | null = null;
-  private jfaSeedProgram: WebGLProgram | null = null;
-  private jfaFloodProgram: WebGLProgram | null = null;
-  private jfaDistProgram: WebGLProgram | null = null;
-  private interiorProgram: WebGLProgram | null = null;
-  private compositeProgram: WebGLProgram | null = null;
-  private boundaryProgram: WebGLProgram | null = null;
-  private chamferProgram: WebGLProgram | null = null;
-
-  // Uniform locations (stored as Record for flexibility)
-  private stencilUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private maskUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private jfaSeedUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private jfaFloodUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private jfaDistUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private interiorUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private compositeUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private boundaryUniforms: Record<string, WebGLUniformLocation | null> = {};
-  private chamferUniforms: Record<string, WebGLUniformLocation | null> = {};
+  // Render passes (each owns its program + cached uniforms)
+  private stencilPass: RenderPass | null = null;
+  private maskPass: RenderPass | null = null;
+  private jfaSeedPass: RenderPass | null = null;
+  private jfaFloodPass: RenderPass | null = null;
+  private jfaDistPass: RenderPass | null = null;
+  private interiorPass: RenderPass | null = null;
+  private compositePass: RenderPass | null = null;
+  private boundaryPass: RenderPass | null = null;
+  private chamferPass: RenderPass | null = null;
 
   // Geometry
   private quadVao: WebGLVertexArrayObject | null = null;
@@ -917,9 +908,10 @@ export class PortalRenderer {
   private chamferVao: WebGLVertexArrayObject | null = null;
   private chamferVertexCount = 0;
 
-  // Source textures
-  private videoTexture: WebGLTexture | null = null;
-  private depthTexture: WebGLTexture | null = null;
+  // Source textures (via TextureRegistry — init-time allocation)
+  private readonly textures = new TextureRegistry();
+  private readonly videoSlot: TextureSlot;
+  private readonly depthSlot: TextureSlot;
 
   // Interior FBO (units 2, 3)
   private interiorFbo: WebGLFramebuffer | null = null;
@@ -977,6 +969,10 @@ export class PortalRenderer {
   constructor(parent: HTMLElement, config: PortalRendererConfig) {
     this.container = parent;
     this.config = { ...config };
+
+    // Register source texture slots at init time — cached references for hot path.
+    this.videoSlot = this.textures.register('video');  // unit 0
+    this.depthSlot = this.textures.register('depth');  // unit 1
 
     // Precompute 2D light direction from angle (for bevel)
     const angleRad = (this.config.bevelLightAngle * Math.PI) / 180;
@@ -1044,19 +1040,19 @@ export class PortalRenderer {
     this.depthWidth = depthWidth;
     this.depthHeight = depthHeight;
 
-    // --- Source video texture (TEXTURE_UNIT 0) ---
-    this.videoTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+    // --- Source video texture (via TextureRegistry, unit 0) ---
+    this.videoSlot.texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    // --- Source depth texture (TEXTURE_UNIT 1) ---
-    this.depthTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.depthTexture);
+    // --- Source depth texture (via TextureRegistry, unit 1) ---
+    this.depthSlot.texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + this.depthSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.depthSlot.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -1076,63 +1072,63 @@ export class PortalRenderer {
     this.uploadChamferMesh(mesh);
 
     // --- Set static interior uniforms ---
-    if (this.interiorProgram) {
-      gl.useProgram(this.interiorProgram);
-      gl.uniform1i(this.interiorUniforms.uImage, 0);
-      gl.uniform1i(this.interiorUniforms.uDepth, 1);
-      gl.uniform1f(this.interiorUniforms.uStrength, this.config.parallaxStrength);
-      gl.uniform1i(this.interiorUniforms.uPomSteps, this.config.pomSteps);
-      gl.uniform1f(this.interiorUniforms.uDepthPower, this.config.depthPower);
-      gl.uniform1f(this.interiorUniforms.uDepthScale, this.config.depthScale);
-      gl.uniform1f(this.interiorUniforms.uDepthBias, this.config.depthBias);
-      gl.uniform1f(this.interiorUniforms.uContrastLow, this.config.contrastLow);
-      gl.uniform1f(this.interiorUniforms.uContrastHigh, this.config.contrastHigh);
-      gl.uniform1f(this.interiorUniforms.uVerticalReduction, this.config.verticalReduction);
-      gl.uniform1f(this.interiorUniforms.uDofStart, this.config.dofStart);
-      gl.uniform1f(this.interiorUniforms.uDofStrength, this.config.dofStrength);
-      gl.uniform2f(this.interiorUniforms.uImageTexelSize, 1.0 / video.videoWidth, 1.0 / video.videoHeight);
-      gl.uniform1f(this.interiorUniforms.uFogDensity, this.config.fogDensity);
-      gl.uniform3f(this.interiorUniforms.uFogColor, ...this.config.fogColor);
-      gl.uniform1f(this.interiorUniforms.uColorShift, this.config.colorShift);
-      gl.uniform1f(this.interiorUniforms.uBrightnessBias, this.config.brightnessBias);
+    if (this.interiorPass) {
+      gl.useProgram(this.interiorPass.program);
+      gl.uniform1i(this.interiorPass.uniforms.uImage, 0);
+      gl.uniform1i(this.interiorPass.uniforms.uDepth, 1);
+      gl.uniform1f(this.interiorPass.uniforms.uStrength, this.config.parallaxStrength);
+      gl.uniform1i(this.interiorPass.uniforms.uPomSteps, this.config.pomSteps);
+      gl.uniform1f(this.interiorPass.uniforms.uDepthPower, this.config.depthPower);
+      gl.uniform1f(this.interiorPass.uniforms.uDepthScale, this.config.depthScale);
+      gl.uniform1f(this.interiorPass.uniforms.uDepthBias, this.config.depthBias);
+      gl.uniform1f(this.interiorPass.uniforms.uContrastLow, this.config.contrastLow);
+      gl.uniform1f(this.interiorPass.uniforms.uContrastHigh, this.config.contrastHigh);
+      gl.uniform1f(this.interiorPass.uniforms.uVerticalReduction, this.config.verticalReduction);
+      gl.uniform1f(this.interiorPass.uniforms.uDofStart, this.config.dofStart);
+      gl.uniform1f(this.interiorPass.uniforms.uDofStrength, this.config.dofStrength);
+      gl.uniform2f(this.interiorPass.uniforms.uImageTexelSize, 1.0 / video.videoWidth, 1.0 / video.videoHeight);
+      gl.uniform1f(this.interiorPass.uniforms.uFogDensity, this.config.fogDensity);
+      gl.uniform3f(this.interiorPass.uniforms.uFogColor, ...this.config.fogColor);
+      gl.uniform1f(this.interiorPass.uniforms.uColorShift, this.config.colorShift);
+      gl.uniform1f(this.interiorPass.uniforms.uBrightnessBias, this.config.brightnessBias);
     }
 
     // --- Set static composite uniforms (emissive passthrough) ---
-    if (this.compositeProgram) {
-      gl.useProgram(this.compositeProgram);
-      gl.uniform1i(this.compositeUniforms.uInteriorColor, 2);
-      gl.uniform1i(this.compositeUniforms.uDistField, 4);
-      gl.uniform1f(this.compositeUniforms.uEdgeOcclusionWidth, this.config.edgeOcclusionWidth);
-      gl.uniform1f(this.compositeUniforms.uEdgeOcclusionStrength, this.config.edgeOcclusionStrength);
+    if (this.compositePass) {
+      gl.useProgram(this.compositePass.program);
+      gl.uniform1i(this.compositePass.uniforms.uInteriorColor, 2);
+      gl.uniform1i(this.compositePass.uniforms.uDistField, 4);
+      gl.uniform1f(this.compositePass.uniforms.uEdgeOcclusionWidth, this.config.edgeOcclusionWidth);
+      gl.uniform1f(this.compositePass.uniforms.uEdgeOcclusionStrength, this.config.edgeOcclusionStrength);
     }
 
     // --- Set static chamfer uniforms ---
-    if (this.chamferProgram) {
-      gl.useProgram(this.chamferProgram);
-      gl.uniform3f(this.chamferUniforms.uLightDir3, ...this.lightDir3);
-      gl.uniform3f(this.chamferUniforms.uChamferColor, ...this.config.chamferColor);
-      gl.uniform1f(this.chamferUniforms.uChamferAmbient, this.config.chamferAmbient);
-      gl.uniform1f(this.chamferUniforms.uChamferSpecular, this.config.chamferSpecular);
-      gl.uniform1f(this.chamferUniforms.uChamferShininess, this.config.chamferShininess);
-      gl.uniform1i(this.chamferUniforms.uInteriorColor, 2);
+    if (this.chamferPass) {
+      gl.useProgram(this.chamferPass.program);
+      gl.uniform3f(this.chamferPass.uniforms.uLightDir3, ...this.lightDir3);
+      gl.uniform3f(this.chamferPass.uniforms.uChamferColor, ...this.config.chamferColor);
+      gl.uniform1f(this.chamferPass.uniforms.uChamferAmbient, this.config.chamferAmbient);
+      gl.uniform1f(this.chamferPass.uniforms.uChamferSpecular, this.config.chamferSpecular);
+      gl.uniform1f(this.chamferPass.uniforms.uChamferShininess, this.config.chamferShininess);
+      gl.uniform1i(this.chamferPass.uniforms.uInteriorColor, 2);
     }
 
     // --- Set static boundary uniforms ---
-    if (this.boundaryProgram) {
-      gl.useProgram(this.boundaryProgram);
-      gl.uniform1i(this.boundaryUniforms.uInteriorColor, 2);
-      gl.uniform1i(this.boundaryUniforms.uInteriorDepth, 3);
-      gl.uniform1i(this.boundaryUniforms.uDistField, 4);
-      gl.uniform1f(this.boundaryUniforms.uRimIntensity, this.config.rimLightIntensity);
-      gl.uniform3f(this.boundaryUniforms.uRimColor, ...this.config.rimLightColor);
-      gl.uniform1f(this.boundaryUniforms.uRefractionStrength, this.config.refractionStrength);
-      gl.uniform1f(this.boundaryUniforms.uChromaticStrength, this.config.chromaticStrength);
-      gl.uniform1f(this.boundaryUniforms.uOcclusionIntensity, this.config.occlusionIntensity);
-      gl.uniform1f(this.boundaryUniforms.uEdgeThickness, this.config.edgeThickness);
-      gl.uniform1f(this.boundaryUniforms.uEdgeSpecular, this.config.edgeSpecular);
-      gl.uniform3f(this.boundaryUniforms.uEdgeColor, ...this.config.edgeColor);
-      gl.uniform2f(this.boundaryUniforms.uLightDir, this.lightDirX, this.lightDirY);
-      gl.uniform1f(this.boundaryUniforms.uBevelIntensity, this.config.bevelIntensity);
+    if (this.boundaryPass) {
+      gl.useProgram(this.boundaryPass.program);
+      gl.uniform1i(this.boundaryPass.uniforms.uInteriorColor, 2);
+      gl.uniform1i(this.boundaryPass.uniforms.uInteriorDepth, 3);
+      gl.uniform1i(this.boundaryPass.uniforms.uDistField, 4);
+      gl.uniform1f(this.boundaryPass.uniforms.uRimIntensity, this.config.rimLightIntensity);
+      gl.uniform3f(this.boundaryPass.uniforms.uRimColor, ...this.config.rimLightColor);
+      gl.uniform1f(this.boundaryPass.uniforms.uRefractionStrength, this.config.refractionStrength);
+      gl.uniform1f(this.boundaryPass.uniforms.uChromaticStrength, this.config.chromaticStrength);
+      gl.uniform1f(this.boundaryPass.uniforms.uOcclusionIntensity, this.config.occlusionIntensity);
+      gl.uniform1f(this.boundaryPass.uniforms.uEdgeThickness, this.config.edgeThickness);
+      gl.uniform1f(this.boundaryPass.uniforms.uEdgeSpecular, this.config.edgeSpecular);
+      gl.uniform3f(this.boundaryPass.uniforms.uEdgeColor, ...this.config.edgeColor);
+      gl.uniform2f(this.boundaryPass.uniforms.uLightDir, this.lightDirX, this.lightDirY);
+      gl.uniform1f(this.boundaryPass.uniforms.uBevelIntensity, this.config.bevelIntensity);
     }
 
     this.recalculateViewportLayout();
@@ -1144,7 +1140,7 @@ export class PortalRenderer {
 
   private uploadStencilMesh(mesh: ShapeMesh): void {
     const gl = this.gl;
-    if (!gl || !this.stencilProgram) return;
+    if (!gl || !this.stencilPass) return;
 
     this.stencilVao = gl.createVertexArray();
     gl.bindVertexArray(this.stencilVao);
@@ -1153,7 +1149,7 @@ export class PortalRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
 
-    const aPosition = gl.getAttribLocation(this.stencilProgram, 'aPosition');
+    const aPosition = gl.getAttribLocation(this.stencilPass.program, 'aPosition');
     gl.enableVertexAttribArray(aPosition);
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
 
@@ -1167,7 +1163,7 @@ export class PortalRenderer {
 
   private uploadMaskMesh(mesh: ShapeMesh): void {
     const gl = this.gl;
-    if (!gl || !this.maskProgram) return;
+    if (!gl || !this.maskPass) return;
 
     this.maskVao = gl.createVertexArray();
     gl.bindVertexArray(this.maskVao);
@@ -1176,7 +1172,7 @@ export class PortalRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
 
-    const aPosition = gl.getAttribLocation(this.maskProgram, 'aPosition');
+    const aPosition = gl.getAttribLocation(this.maskPass.program, 'aPosition');
     gl.enableVertexAttribArray(aPosition);
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
 
@@ -1189,7 +1185,7 @@ export class PortalRenderer {
 
   private uploadBoundaryMesh(mesh: ShapeMesh): void {
     const gl = this.gl;
-    if (!gl || !this.boundaryProgram) return;
+    if (!gl || !this.boundaryPass) return;
 
     const edgeMesh = buildEdgeMesh(mesh.edgeVertices);
     if (edgeMesh.count === 0) return;
@@ -1203,11 +1199,11 @@ export class PortalRenderer {
 
     const stride = 4 * 4; // x, y, nx, ny
 
-    const aPosition = gl.getAttribLocation(this.boundaryProgram, 'aPosition');
+    const aPosition = gl.getAttribLocation(this.boundaryPass.program, 'aPosition');
     gl.enableVertexAttribArray(aPosition);
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, stride, 0);
 
-    const aNormal = gl.getAttribLocation(this.boundaryProgram, 'aNormal');
+    const aNormal = gl.getAttribLocation(this.boundaryPass.program, 'aNormal');
     if (aNormal >= 0) {
       gl.enableVertexAttribArray(aNormal);
       gl.vertexAttribPointer(aNormal, 2, gl.FLOAT, false, stride, 2 * 4);
@@ -1219,7 +1215,7 @@ export class PortalRenderer {
 
   private uploadChamferMesh(mesh: ShapeMesh): void {
     const gl = this.gl;
-    if (!gl || !this.chamferProgram) return;
+    if (!gl || !this.chamferPass) return;
     if (this.config.chamferWidth <= 0) return;
 
     const chamferMesh = buildChamferMesh(
@@ -1240,17 +1236,17 @@ export class PortalRenderer {
 
     const stride = 6 * 4; // x, y, nx3, ny3, nz3, lerpT
 
-    const aPosition = gl.getAttribLocation(this.chamferProgram, 'aPosition');
+    const aPosition = gl.getAttribLocation(this.chamferPass.program, 'aPosition');
     gl.enableVertexAttribArray(aPosition);
     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, stride, 0);
 
-    const aNormal3 = gl.getAttribLocation(this.chamferProgram, 'aNormal3');
+    const aNormal3 = gl.getAttribLocation(this.chamferPass.program, 'aNormal3');
     if (aNormal3 >= 0) {
       gl.enableVertexAttribArray(aNormal3);
       gl.vertexAttribPointer(aNormal3, 3, gl.FLOAT, false, stride, 2 * 4);
     }
 
-    const aLerpT = gl.getAttribLocation(this.chamferProgram, 'aLerpT');
+    const aLerpT = gl.getAttribLocation(this.chamferPass.program, 'aLerpT');
     if (aLerpT >= 0) {
       gl.enableVertexAttribArray(aLerpT);
       gl.vertexAttribPointer(aLerpT, 1, gl.FLOAT, false, stride, 5 * 4);
@@ -1386,8 +1382,8 @@ export class PortalRenderer {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.useProgram(this.maskProgram!);
-    gl.uniform2f(this.maskUniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
+    gl.useProgram(this.maskPass!.program);
+    gl.uniform2f(this.maskPass!.uniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
     gl.bindVertexArray(this.maskVao);
     gl.drawElements(gl.TRIANGLES, this.stencilIndexCount, gl.UNSIGNED_SHORT, 0);
 
@@ -1396,12 +1392,12 @@ export class PortalRenderer {
     gl.clearColor(-1, -1, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.useProgram(this.jfaSeedProgram!);
+    gl.useProgram(this.jfaSeedPass!.program);
     // Bind mask texture to a temporary unit (5)
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
-    gl.uniform1i(this.jfaSeedUniforms.uMask, 5);
-    gl.uniform2f(this.jfaSeedUniforms.uTexelSize, 1.0 / w, 1.0 / h);
+    gl.uniform1i(this.jfaSeedPass!.uniforms.uMask, 5);
+    gl.uniform2f(this.jfaSeedPass!.uniforms.uTexelSize, 1.0 / w, 1.0 / h);
 
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -1415,7 +1411,7 @@ export class PortalRenderer {
       step = Math.floor(step / 2);
     }
 
-    gl.useProgram(this.jfaFloodProgram!);
+    gl.useProgram(this.jfaFloodPass!.program);
     let readTex = this.jfaPingTex;
     let writeFbo = this.jfaPongFbo;
     let writeTex = this.jfaPongTex;
@@ -1427,8 +1423,8 @@ export class PortalRenderer {
 
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, readTex);
-      gl.uniform1i(this.jfaFloodUniforms.uSeedTex, 5);
-      gl.uniform1f(this.jfaFloodUniforms.uStepSize, stepSizeUv);
+      gl.uniform1i(this.jfaFloodPass!.uniforms.uSeedTex, 5);
+      gl.uniform1f(this.jfaFloodPass!.uniforms.uStepSize, stepSizeUv);
 
       gl.bindVertexArray(this.quadVao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -1448,18 +1444,18 @@ export class PortalRenderer {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.useProgram(this.jfaDistProgram!);
+    gl.useProgram(this.jfaDistPass!.program);
 
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, readTex);
-    gl.uniform1i(this.jfaDistUniforms.uSeedTex, 5);
+    gl.uniform1i(this.jfaDistPass!.uniforms.uSeedTex, 5);
 
     gl.activeTexture(gl.TEXTURE6);
     gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
-    gl.uniform1i(this.jfaDistUniforms.uMask, 6);
+    gl.uniform1i(this.jfaDistPass!.uniforms.uMask, 6);
 
     const distRange = Math.max(this.config.bevelWidth, this.config.edgeOcclusionWidth);
-    gl.uniform1f(this.jfaDistUniforms.uBevelWidth, distRange);
+    gl.uniform1f(this.jfaDistPass!.uniforms.uBevelWidth, distRange);
 
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -1555,45 +1551,14 @@ export class PortalRenderer {
     const gl = this.gl;
     if (!gl) return;
 
-    // --- Stencil program ---
-    this.stencilProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, STENCIL_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, STENCIL_FS));
-    this.stencilUniforms = {
-      uMeshScale: gl.getUniformLocation(this.stencilProgram, 'uMeshScale'),
-    };
+    // --- Create all render passes via shared factory ---
+    this.stencilPass = createPass(gl, 'stencil', STENCIL_VS, STENCIL_FS, ['uMeshScale']);
+    this.maskPass = createPass(gl, 'mask', MASK_VS, MASK_FS, ['uMeshScale']);
+    this.jfaSeedPass = createPass(gl, 'jfa-seed', JFA_SEED_VS, JFA_SEED_FS, ['uMask', 'uTexelSize']);
+    this.jfaFloodPass = createPass(gl, 'jfa-flood', JFA_FLOOD_VS, JFA_FLOOD_FS, ['uSeedTex', 'uStepSize']);
+    this.jfaDistPass = createPass(gl, 'jfa-dist', JFA_DIST_VS, JFA_DIST_FS, ['uSeedTex', 'uMask', 'uBevelWidth']);
 
-    // --- Mask program (for JFA input) ---
-    this.maskProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, MASK_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, MASK_FS));
-    this.maskUniforms = {
-      uMeshScale: gl.getUniformLocation(this.maskProgram, 'uMeshScale'),
-    };
-
-    // --- JFA Seed program ---
-    this.jfaSeedProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, JFA_SEED_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, JFA_SEED_FS));
-    this.jfaSeedUniforms = this.getUniforms(this.jfaSeedProgram, ['uMask', 'uTexelSize']);
-
-    // --- JFA Flood program ---
-    this.jfaFloodProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, JFA_FLOOD_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, JFA_FLOOD_FS));
-    this.jfaFloodUniforms = this.getUniforms(this.jfaFloodProgram, ['uSeedTex', 'uStepSize']);
-
-    // --- JFA Distance program ---
-    this.jfaDistProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, JFA_DIST_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, JFA_DIST_FS));
-    this.jfaDistUniforms = this.getUniforms(this.jfaDistProgram, ['uSeedTex', 'uMask', 'uBevelWidth']);
-
-    // --- Interior program ---
-    this.interiorProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, INTERIOR_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, INTERIOR_FS));
-    this.interiorUniforms = this.getUniforms(this.interiorProgram, [
+    this.interiorPass = createPass(gl, 'interior', INTERIOR_VS, INTERIOR_FS, [
       'uImage', 'uDepth', 'uOffset', 'uStrength', 'uPomSteps',
       'uDepthPower', 'uDepthScale', 'uDepthBias',
       'uContrastLow', 'uContrastHigh', 'uVerticalReduction',
@@ -1602,20 +1567,12 @@ export class PortalRenderer {
       'uUvOffset', 'uUvScale',
     ]);
 
-    // --- Composite program (emissive passthrough) ---
-    this.compositeProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, COMPOSITE_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, COMPOSITE_FS));
-    this.compositeUniforms = this.getUniforms(this.compositeProgram, [
+    this.compositePass = createPass(gl, 'composite', COMPOSITE_VS, COMPOSITE_FS, [
       'uInteriorColor', 'uDistField',
       'uEdgeOcclusionWidth', 'uEdgeOcclusionStrength',
     ]);
 
-    // --- Boundary program (with volumetric edge) ---
-    this.boundaryProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, BOUNDARY_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, BOUNDARY_FS));
-    this.boundaryUniforms = this.getUniforms(this.boundaryProgram, [
+    this.boundaryPass = createPass(gl, 'boundary', BOUNDARY_VS, BOUNDARY_FS, [
       'uInteriorColor', 'uInteriorDepth', 'uDistField',
       'uRimIntensity', 'uRimColor', 'uRimWidth', 'uMeshScale',
       'uRefractionStrength', 'uChromaticStrength', 'uOcclusionIntensity',
@@ -1624,40 +1581,16 @@ export class PortalRenderer {
       'uLightDir', 'uBevelIntensity',
     ]);
 
-    // --- Chamfer program ---
-    this.chamferProgram = linkProgram(gl,
-      compileShader(gl, gl.VERTEX_SHADER, CHAMFER_VS),
-      compileShader(gl, gl.FRAGMENT_SHADER, CHAMFER_FS));
-    this.chamferUniforms = this.getUniforms(this.chamferProgram, [
+    this.chamferPass = createPass(gl, 'chamfer', CHAMFER_VS, CHAMFER_FS, [
       'uMeshScale', 'uLightDir3',
       'uChamferColor', 'uChamferAmbient', 'uChamferSpecular', 'uChamferShininess',
       'uInteriorColor', 'uTexelSize',
     ]);
 
-    // --- Fullscreen quad VAO ---
-    const quadVertices = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
-    this.quadVao = gl.createVertexArray();
-    gl.bindVertexArray(this.quadVao);
-    const vbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-
-    // Interior and composite both use aPosition at location 0
-    const aPos = gl.getAttribLocation(this.interiorProgram, 'aPosition');
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-    gl.bindVertexArray(null);
+    // --- Fullscreen quad VAO (shared across fullscreen passes) ---
+    this.quadVao = createFullscreenQuadVao(gl, this.interiorPass.program);
 
     gl.disable(gl.DEPTH_TEST);
-  }
-
-  private getUniforms(program: WebGLProgram, names: string[]): Record<string, WebGLUniformLocation | null> {
-    const gl = this.gl!;
-    const result: Record<string, WebGLUniformLocation | null> = {};
-    for (const name of names) {
-      result[name] = gl.getUniformLocation(program, name);
-    }
-    return result;
   }
 
   // -----------------------------------------------------------------------
@@ -1687,7 +1620,7 @@ export class PortalRenderer {
 
     const gl = this.gl;
     const video = this.playbackVideo;
-    if (!gl || !this.interiorProgram || !this.quadVao) return;
+    if (!gl || !this.interiorPass || !this.quadVao) return;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
     if (!this.interiorFbo || !this.interiorColorTex || !this.interiorDepthTex) return;
 
@@ -1699,8 +1632,8 @@ export class PortalRenderer {
     }
 
     // Upload current video frame
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+    gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
 
     // Fallback depth update
@@ -1732,14 +1665,14 @@ export class PortalRenderer {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.useProgram(this.interiorProgram);
-    gl.uniform2f(this.interiorUniforms.uOffset, inputX, inputY);
+    gl.useProgram(this.interiorPass!.program);
+    gl.uniform2f(this.interiorPass!.uniforms.uOffset, inputX, inputY);
 
     // Bind source textures
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.depthTexture);
+    gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
+    gl.activeTexture(gl.TEXTURE0 + this.depthSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.depthSlot.texture);
 
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -1754,14 +1687,14 @@ export class PortalRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
     // PASS 2a: Stencil mark
-    if (this.stencilVao && this.stencilProgram && this.stencilIndexCount > 0) {
+    if (this.stencilVao && this.stencilPass && this.stencilIndexCount > 0) {
       gl.enable(gl.STENCIL_TEST);
       gl.stencilFunc(gl.ALWAYS, 1, 0xFF);
       gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
       gl.stencilMask(0xFF);
       gl.colorMask(false, false, false, false);
 
-      gl.useProgram(this.stencilProgram);
+      gl.useProgram(this.stencilPass!.program);
       gl.bindVertexArray(this.stencilVao);
       gl.drawElements(gl.TRIANGLES, this.stencilIndexCount, gl.UNSIGNED_SHORT, 0);
 
@@ -1780,18 +1713,18 @@ export class PortalRenderer {
     gl.activeTexture(gl.TEXTURE4);
     gl.bindTexture(gl.TEXTURE_2D, this.distTex);
 
-    gl.useProgram(this.compositeProgram!);
+    gl.useProgram(this.compositePass!.program);
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     gl.disable(gl.STENCIL_TEST);
 
     // PASS 2c: Chamfer geometry (opaque, no stencil, no blend)
-    if (this.chamferVao && this.chamferProgram && this.chamferVertexCount > 0) {
+    if (this.chamferVao && this.chamferPass && this.chamferVertexCount > 0) {
       // FBO textures already bound to units 2, 3, 4
-      gl.useProgram(this.chamferProgram);
-      gl.uniform2f(this.chamferUniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
-      gl.uniform2f(this.chamferUniforms.uTexelSize, 1.0 / this.canvas.width, 1.0 / this.canvas.height);
+      gl.useProgram(this.chamferPass.program);
+      gl.uniform2f(this.chamferPass.uniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
+      gl.uniform2f(this.chamferPass.uniforms.uTexelSize, 1.0 / this.canvas.width, 1.0 / this.canvas.height);
       gl.bindVertexArray(this.chamferVao);
       gl.drawArrays(gl.TRIANGLES, 0, this.chamferVertexCount);
     }
@@ -1799,14 +1732,14 @@ export class PortalRenderer {
     // ============================
     // PASS 3: Boundary effects (always runs, no depth test)
     // ============================
-    if (this.boundaryVao && this.boundaryProgram && this.boundaryVertexCount > 0 &&
+    if (this.boundaryVao && this.boundaryPass && this.boundaryVertexCount > 0 &&
         this.config.rimLightIntensity > 0) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
       // FBO textures already bound to units 2, 3, 4
 
-      gl.useProgram(this.boundaryProgram);
+      gl.useProgram(this.boundaryPass.program);
       gl.bindVertexArray(this.boundaryVao);
       gl.drawArrays(gl.TRIANGLES, 0, this.boundaryVertexCount);
 
@@ -1816,10 +1749,10 @@ export class PortalRenderer {
 
   private updateDepthTexture(timeSec: number): void {
     const gl = this.gl;
-    if (!gl || !this.readDepth || !this.depthTexture) return;
+    if (!gl || !this.readDepth || !this.depthSlot.texture) return;
     const depthData = this.readDepth(timeSec);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.depthTexture);
+    gl.activeTexture(gl.TEXTURE0 + this.depthSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.depthSlot.texture);
     gl.texSubImage2D(
       gl.TEXTURE_2D, 0, 0, 0,
       this.depthWidth, this.depthHeight,
@@ -1900,10 +1833,10 @@ export class PortalRenderer {
     this.uvOffset = [(1.0 - scaleU) / 2.0, (1.0 - scaleV) / 2.0];
     this.uvScale = [scaleU, scaleV];
 
-    if (this.interiorProgram) {
-      gl.useProgram(this.interiorProgram);
-      gl.uniform2f(this.interiorUniforms.uUvOffset, this.uvOffset[0], this.uvOffset[1]);
-      gl.uniform2f(this.interiorUniforms.uUvScale, this.uvScale[0], this.uvScale[1]);
+    if (this.interiorPass) {
+      gl.useProgram(this.interiorPass.program);
+      gl.uniform2f(this.interiorPass.uniforms.uUvOffset, this.uvOffset[0], this.uvOffset[1]);
+      gl.uniform2f(this.interiorPass.uniforms.uUvScale, this.uvScale[0], this.uvScale[1]);
     }
 
     // Mesh scale
@@ -1916,19 +1849,19 @@ export class PortalRenderer {
       this.meshScaleY = fillFactor * (viewportAspect / this.meshAspect);
     }
 
-    if (this.stencilProgram) {
-      gl.useProgram(this.stencilProgram);
-      gl.uniform2f(this.stencilUniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
+    if (this.stencilPass) {
+      gl.useProgram(this.stencilPass.program);
+      gl.uniform2f(this.stencilPass.uniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
     }
-    if (this.boundaryProgram) {
-      gl.useProgram(this.boundaryProgram);
-      gl.uniform2f(this.boundaryUniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
-      gl.uniform1f(this.boundaryUniforms.uRimWidth, this.config.rimLightWidth);
-      gl.uniform2f(this.boundaryUniforms.uTexelSize, 1.0 / bufferWidth, 1.0 / bufferHeight);
+    if (this.boundaryPass) {
+      gl.useProgram(this.boundaryPass.program);
+      gl.uniform2f(this.boundaryPass.uniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
+      gl.uniform1f(this.boundaryPass.uniforms.uRimWidth, this.config.rimLightWidth);
+      gl.uniform2f(this.boundaryPass.uniforms.uTexelSize, 1.0 / bufferWidth, 1.0 / bufferHeight);
     }
-    if (this.chamferProgram) {
-      gl.useProgram(this.chamferProgram);
-      gl.uniform2f(this.chamferUniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
+    if (this.chamferPass) {
+      gl.useProgram(this.chamferPass.program);
+      gl.uniform2f(this.chamferPass.uniforms.uMeshScale, this.meshScaleX, this.meshScaleY);
     }
 
     // Mark distance field as dirty so it recomputes on next frame
@@ -1976,11 +1909,11 @@ export class PortalRenderer {
   // Cleanup
   // -----------------------------------------------------------------------
 
+  /** Dispose source textures via the registry (video, depth). */
   private disposeTextures(): void {
     const gl = this.gl;
     if (!gl) return;
-    if (this.videoTexture) { gl.deleteTexture(this.videoTexture); this.videoTexture = null; }
-    if (this.depthTexture) { gl.deleteTexture(this.depthTexture); this.depthTexture = null; }
+    this.textures.disposeAll(gl);
   }
 
   private disposeFBO(): void {
@@ -2024,27 +1957,31 @@ export class PortalRenderer {
     this.boundaryVertexCount = 0;
   }
 
+  /** Dispose all render passes and shared VAO. */
   private disposeGPUResources(): void {
     const gl = this.gl;
     if (!gl) return;
-    if (this.stencilProgram) { gl.deleteProgram(this.stencilProgram); this.stencilProgram = null; }
-    if (this.maskProgram) { gl.deleteProgram(this.maskProgram); this.maskProgram = null; }
-    if (this.jfaSeedProgram) { gl.deleteProgram(this.jfaSeedProgram); this.jfaSeedProgram = null; }
-    if (this.jfaFloodProgram) { gl.deleteProgram(this.jfaFloodProgram); this.jfaFloodProgram = null; }
-    if (this.jfaDistProgram) { gl.deleteProgram(this.jfaDistProgram); this.jfaDistProgram = null; }
-    if (this.interiorProgram) { gl.deleteProgram(this.interiorProgram); this.interiorProgram = null; }
-    if (this.compositeProgram) { gl.deleteProgram(this.compositeProgram); this.compositeProgram = null; }
-    if (this.boundaryProgram) { gl.deleteProgram(this.boundaryProgram); this.boundaryProgram = null; }
-    if (this.chamferProgram) { gl.deleteProgram(this.chamferProgram); this.chamferProgram = null; }
+
+    // Dispose each pass (releases its program).
+    const passes = [
+      this.stencilPass, this.maskPass,
+      this.jfaSeedPass, this.jfaFloodPass, this.jfaDistPass,
+      this.interiorPass, this.compositePass,
+      this.boundaryPass, this.chamferPass,
+    ];
+    for (const pass of passes) {
+      if (pass) pass.dispose(gl);
+    }
+    this.stencilPass = null;
+    this.maskPass = null;
+    this.jfaSeedPass = null;
+    this.jfaFloodPass = null;
+    this.jfaDistPass = null;
+    this.interiorPass = null;
+    this.compositePass = null;
+    this.boundaryPass = null;
+    this.chamferPass = null;
+
     if (this.quadVao) { gl.deleteVertexArray(this.quadVao); this.quadVao = null; }
-    this.stencilUniforms = {};
-    this.maskUniforms = {};
-    this.jfaSeedUniforms = {};
-    this.jfaFloodUniforms = {};
-    this.jfaDistUniforms = {};
-    this.interiorUniforms = {};
-    this.compositeUniforms = {};
-    this.boundaryUniforms = {};
-    this.chamferUniforms = {};
   }
 }

@@ -39,6 +39,8 @@ import {
   getUniformLocations,
   createFullscreenQuadVao,
 } from './webgl-utils';
+import type { RenderPass, FBOPass, TextureSlot } from './render-pass';
+import { TextureRegistry } from './render-pass';
 
 // ---------------------------------------------------------------------------
 // GLSL Shaders (GLSL 300 es for WebGL 2)
@@ -391,14 +393,16 @@ const SHADER_PARAM_DEFAULTS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Render pass interfaces
+// Render pass types (extend shared framework interfaces)
 // ---------------------------------------------------------------------------
 
-/** Bilateral filter pass — edge-preserving depth smoothing via FBO. */
-interface BilateralFilterPass {
-  readonly program: WebGLProgram;
-  readonly uniforms: Record<string, WebGLUniformLocation | null>;
-
+/**
+ * Bilateral filter pass — extends shared FBOPass with pass-specific methods.
+ *
+ * The base FBOPass provides program, uniforms, fbo, outputs, resize, dispose.
+ * This adds `initFBO()` and `execute()` which have bilateral-specific signatures.
+ */
+type BilateralFilterPass = FBOPass & {
   /** Create FBO targeting filteredDepthTexture and set static uniforms. */
   initFBO(
     gl: WebGL2RenderingContext,
@@ -424,16 +428,15 @@ interface BilateralFilterPass {
     canvasWidth: number,
     canvasHeight: number
   ): void;
+};
 
-  /** Release program and FBO. */
-  dispose(gl: WebGL2RenderingContext): void;
-}
-
-/** Parallax rendering pass — depth-based displacement to screen. */
-interface ParallaxRenderPass {
-  readonly program: WebGLProgram;
-  readonly uniforms: Record<string, WebGLUniformLocation | null>;
-
+/**
+ * Parallax rendering pass — extends shared RenderPass with pass-specific methods.
+ *
+ * The base RenderPass provides program, uniforms, dispose.
+ * This adds `setStaticUniforms()` and `updateUvTransform()`.
+ */
+type ParallaxPass = RenderPass & {
   /** Set static uniforms (strength, POM, contrast, DOF, texel size). */
   setStaticUniforms(
     gl: WebGL2RenderingContext,
@@ -448,10 +451,7 @@ interface ParallaxRenderPass {
     uvOffset: readonly number[],
     uvScale: readonly number[]
   ): void;
-
-  /** Release program. */
-  dispose(gl: WebGL2RenderingContext): void;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Bilateral filter pass factory
@@ -470,9 +470,20 @@ function createBilateralFilterPass(
 
   let fbo: WebGLFramebuffer | null = null;
 
-  return {
+  const pass: BilateralFilterPass = {
+    name: 'bilateral-filter',
     program,
     uniforms,
+    fbo: null,
+    outputs: [],
+    width: 0,
+    height: 0,
+
+    resize(_gl: WebGL2RenderingContext, _width: number, _height: number): void {
+      // Bilateral filter uses initFBO() instead of generic resize(),
+      // because its output texture is owned by the renderer (filteredDepthTexture
+      // is shared with the parallax pass as input).
+    },
 
     initFBO(
       gl: WebGL2RenderingContext,
@@ -485,7 +496,11 @@ function createBilateralFilterPass(
         gl.deleteFramebuffer(fbo);
       }
 
+      pass.width = depthWidth;
+      pass.height = depthHeight;
+
       fbo = gl.createFramebuffer();
+      pass.fbo = fbo;
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(
         gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
@@ -539,10 +554,13 @@ function createBilateralFilterPass(
       if (fbo) {
         gl.deleteFramebuffer(fbo);
         fbo = null;
+        pass.fbo = null;
       }
       gl.deleteProgram(program);
     },
   };
+
+  return pass;
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +581,7 @@ const MAX_POM_STEPS = 64;
 
 function createParallaxPass(
   gl: WebGL2RenderingContext
-): ParallaxRenderPass {
+): ParallaxPass {
   // Inject MAX_POM_STEPS as a #define into the fragment shader.
   const fragSource = FRAGMENT_SHADER.replace(
     '#version 300 es',
@@ -576,6 +594,7 @@ function createParallaxPass(
   const uniforms = getUniformLocations(gl, program, PARALLAX_UNIFORM_NAMES);
 
   return {
+    name: 'parallax',
     program,
     uniforms,
 
@@ -635,12 +654,13 @@ export class ParallaxRenderer {
 
   // ---- Render passes ----
   private bilateralPass: BilateralFilterPass | null = null;
-  private parallaxPass: ParallaxRenderPass | null = null;
+  private parallaxPass: ParallaxPass | null = null;
 
-  // ---- Shared textures ----
-  private videoTexture: WebGLTexture | null = null;
-  private rawDepthTexture: WebGLTexture | null = null;
-  private filteredDepthTexture: WebGLTexture | null = null;
+  // ---- Texture registry (init-time allocation, zero per-frame overhead) ----
+  private readonly textures = new TextureRegistry();
+  private readonly videoSlot: TextureSlot;
+  private readonly filteredDepthSlot: TextureSlot;
+  private readonly rawDepthSlot: TextureSlot;
 
   // ---- Depth data dimensions ----
   private depthWidth = 0;
@@ -691,6 +711,12 @@ export class ParallaxRenderer {
     config: ParallaxRendererConfig
   ) {
     this.container = parent;
+
+    // Register texture slots at init time — cached references used in hot path.
+    // Unit numbers: video=0, filteredDepth=1, rawDepth=2
+    this.videoSlot = this.textures.register('video');           // unit 0
+    this.filteredDepthSlot = this.textures.register('filteredDepth'); // unit 1
+    this.rawDepthSlot = this.textures.register('rawDepth');     // unit 2
 
     // Merge explicit config with calibrated defaults for optional shader params.
     this.config = {
@@ -758,32 +784,32 @@ export class ParallaxRenderer {
     this.depthWidth = depthWidth;
     this.depthHeight = depthHeight;
 
-    // --- Video texture (TEXTURE_UNIT 0) ---
-    this.videoTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+    // --- Video texture (via TextureRegistry, unit 0) ---
+    this.videoSlot.texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    // --- Raw depth texture (TEXTURE_UNIT 2) ---
+    // --- Raw depth texture (via TextureRegistry, unit 2) ---
     // Receives raw interpolated depth from CPU. Used as input to the
     // bilateral filter pass.
-    this.rawDepthTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.rawDepthTexture);
+    this.rawDepthSlot.texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + this.rawDepthSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.rawDepthSlot.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, depthWidth, depthHeight);
 
-    // --- Filtered depth texture (TEXTURE_UNIT 1) ---
+    // --- Filtered depth texture (via TextureRegistry, unit 1) ---
     // Output of the bilateral filter pass. Read by the parallax shader.
-    this.filteredDepthTexture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.filteredDepthTexture);
+    this.filteredDepthSlot.texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + this.filteredDepthSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.filteredDepthSlot.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -791,8 +817,8 @@ export class ParallaxRenderer {
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, depthWidth, depthHeight);
 
     // --- Initialize bilateral filter pass FBO + static uniforms ---
-    if (this.bilateralPass) {
-      this.bilateralPass.initFBO(gl, this.filteredDepthTexture, depthWidth, depthHeight);
+    if (this.bilateralPass && this.filteredDepthSlot.texture) {
+      this.bilateralPass.initFBO(gl, this.filteredDepthSlot.texture, depthWidth, depthHeight);
     }
 
     // --- Set parallax pass static uniforms ---
@@ -991,8 +1017,8 @@ export class ParallaxRenderer {
 
     // Upload the current video frame to the GPU.
     // Y-flip is handled globally (UNPACK_FLIP_Y_WEBGL set once in constructor).
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+    gl.activeTexture(gl.TEXTURE0 + this.videoSlot.unit);
+    gl.bindTexture(gl.TEXTURE_2D, this.videoSlot.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
 
     // Fallback: when RVFC is not supported, do depth update here.
@@ -1025,14 +1051,14 @@ export class ParallaxRenderer {
     const gl = this.gl;
     if (
       !gl || !this.readDepth ||
-      !this.rawDepthTexture || !this.bilateralPass
+      !this.rawDepthSlot.texture || !this.bilateralPass
     ) return;
 
     const depthData = this.readDepth(timeSec);
     this.bilateralPass.execute(
       gl,
       this.quadVao!,
-      this.rawDepthTexture,
+      this.rawDepthSlot.texture,
       depthData,
       this.depthWidth,
       this.depthHeight,
@@ -1178,23 +1204,12 @@ export class ParallaxRenderer {
   // Cleanup
   // -----------------------------------------------------------------------
 
-  /** Dispose textures only (shared resources, owned by the renderer). */
+  /** Dispose all textures via the registry (video, rawDepth, filteredDepth). */
   private disposeTextures(): void {
     const gl = this.gl;
     if (!gl) return;
 
-    if (this.videoTexture) {
-      gl.deleteTexture(this.videoTexture);
-      this.videoTexture = null;
-    }
-    if (this.rawDepthTexture) {
-      gl.deleteTexture(this.rawDepthTexture);
-      this.rawDepthTexture = null;
-    }
-    if (this.filteredDepthTexture) {
-      gl.deleteTexture(this.filteredDepthTexture);
-      this.filteredDepthTexture = null;
-    }
+    this.textures.disposeAll(gl);
   }
 
   /** Dispose render passes and shared VAO. */
