@@ -66,3 +66,10 @@ export const PortalEffect: Story = {
     tagName: 'layershift-portal',
   },
 };
+
+/** Rack Focus effect tag name variant. */
+export const RackFocusEffect: Story = {
+  args: {
+    tagName: 'layershift-rack-focus',
+  },
+};

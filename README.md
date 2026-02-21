@@ -22,6 +22,21 @@ A precomputed depth map drives per-pixel UV displacement with Parallax Occlusion
 ></layershift-parallax>
 ```
 
+### `<layershift-rack-focus>` — Interactive Depth-of-Field
+
+Interactive rack focus with cinematic bokeh blur. Users control the focal plane via pointer, touch, or scroll — the focus transitions smoothly using spring dynamics. Poisson disc sampling produces film-like circular bokeh with depth-aware bleeding prevention and highlight bloom.
+
+```html
+<script src="https://cdn.layershift.io/layershift.js"></script>
+
+<layershift-rack-focus
+  src="video.mp4"
+  depth-src="depth-data.bin"
+  depth-meta="depth-meta.json"
+  focus-mode="pointer"
+></layershift-rack-focus>
+```
+
 ### `<layershift-portal>` — Logo Depth Portal
 
 Renders video through an SVG-shaped cutout with depth-aware parallax, emissive interior compositing, geometric chamfer lighting, and dimensional boundary effects. The canvas background is fully transparent, so the portal can be overlaid on any HTML content.
@@ -57,7 +72,7 @@ npm install layershift
 
 ```js
 import 'layershift';
-// Both <layershift-parallax> and <layershift-portal> are now registered
+// <layershift-parallax>, <layershift-rack-focus>, and <layershift-portal> are now registered
 ```
 
 ### TypeScript
@@ -174,6 +189,89 @@ Each `<layershift-parallax>` instance creates 1 WebGL renderer, 1 Web Worker, 1 
 
 ---
 
+## `<layershift-rack-focus>` Reference
+
+### Focus Control
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `src` | string | — | Video file URL (required) |
+| `depth-src` | string | — | Depth binary URL (required) |
+| `depth-meta` | string | — | Depth metadata URL (required) |
+| `focus-mode` | string | `auto` | `auto` \| `pointer` \| `scroll` \| `programmatic` |
+| `focus-depth` | number | derived | Initial focal depth [0,1] |
+| `focus-range` | number | derived | In-focus zone width |
+| `transition-speed` | number | 300 | Base transition duration (ms) |
+| `focus-breathing` | number | 0.015 | UV zoom during transitions |
+
+### Blur Parameters
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `aperture` | number | 1.0 | Blur intensity multiplier |
+| `max-blur` | number | 24.0 | Maximum blur radius (pixels) |
+| `depth-scale` | number | derived | Depth-to-blur conversion factor |
+| `highlight-bloom` | boolean | true | Enable bokeh highlight boost |
+| `highlight-threshold` | number | 0.85 | Luminance threshold for bloom |
+| `vignette` | number | 0.15 | Edge darkening strength |
+| `quality` | string | auto | `auto` \| `high` \| `medium` \| `low` |
+| `autoplay` | boolean | true | Auto-play on mount |
+| `loop` | boolean | true | Loop playback |
+| `muted` | boolean | true | Muted (required for autoplay) |
+
+### JavaScript API
+
+```js
+const el = document.querySelector('layershift-rack-focus');
+
+// Read/write focal depth (triggers spring transition)
+el.focusDepth = 0.3;
+
+// Check if spring is animating
+console.log(el.transitioning); // boolean
+
+// Programmatic focus with custom duration
+el.setFocusDepth(0.7, { duration: 500 });
+
+// Reset to auto-determined focus
+el.resetFocus();
+```
+
+### Events
+
+| Event | Detail | When |
+|-------|--------|------|
+| `layershift-rack-focus:ready` | `{ videoWidth, videoHeight, duration, initialFocusDepth }` | Initialization complete |
+| `layershift-rack-focus:focus-change` | `{ targetDepth, transitionDuration, source }` | Focus target changes |
+| `layershift-rack-focus:focus-settled` | `{ focalDepth }` | Spring animation settles |
+| `layershift-rack-focus:play` | `{ currentTime }` | Video starts playing |
+| `layershift-rack-focus:pause` | `{ currentTime }` | Video pauses |
+| `layershift-rack-focus:loop` | `{ loopCount }` | Video loops back to start |
+| `layershift-rack-focus:frame` | `{ currentTime, frameNumber }` | New video frame presented |
+| `layershift-rack-focus:error` | `{ message }` | Initialization error |
+
+```js
+el.addEventListener('layershift-rack-focus:focus-change', (e) => {
+  console.log(`Racking to depth ${e.detail.targetDepth} over ${e.detail.transitionDuration}ms`);
+});
+
+el.addEventListener('layershift-rack-focus:focus-settled', (e) => {
+  console.log(`Focus settled at ${e.detail.focalDepth}`);
+});
+```
+
+### Performance
+
+Each `<layershift-rack-focus>` instance creates 1 WebGL/WebGPU renderer, 1 hidden `<video>` element, and 5 GPU textures (3 draw calls per frame). The bilateral filter runs at depth keyframe rate (~5fps).
+
+| Instances | Suitability |
+|-----------|-------------|
+| **1–3** | Smooth on all modern devices including mobile |
+| **4–6** | Great on desktop; mobile may hit video decoder limits |
+| **8+** | Desktop only; consider pausing off-screen instances |
+
+---
+
 ## `<layershift-portal>` Reference
 
 ### Required Attributes
@@ -240,10 +338,10 @@ The `logo-src` SVG should use a `viewBox` attribute and contain filled shapes (`
 
 ## Frame-Level Sync
 
-Both effects use `requestVideoFrameCallback` (RVFC) when available to sync depth updates to actual video frame presentation:
+All three effects use `requestVideoFrameCallback` (RVFC) when available to sync depth updates to actual video frame presentation:
 
 - Depth work only runs when a new frame is decoded (~24–30fps)
-- Parallax input stays smooth at display refresh rate (60–120fps)
+- Input and rendering stay smooth at display refresh rate (60–120fps)
 - Frame events fire at true video frame rate
 - Browsers without RVFC fall back to `requestAnimationFrame` automatically
 

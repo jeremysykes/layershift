@@ -25,11 +25,11 @@ async function loadVideoManifest(): Promise<VideoManifest> {
     const data = await res.json();
     // Support both new categorized format and legacy flat array
     if (Array.isArray(data)) {
-      return { parallax: data as VideoEntry[], textural: [] };
+      return { parallax: data as VideoEntry[], textural: [], 'rack-focus': [] };
     }
     return data as VideoManifest;
   } catch {
-    return { parallax: [], textural: [] };
+    return { parallax: [], textural: [], 'rack-focus': [] };
   }
 }
 

@@ -4,12 +4,14 @@ import { createElement, useEffect, useRef } from 'react';
 const READY_EVENTS: Record<string, string> = {
   'layershift-parallax': 'layershift-parallax:ready',
   'layershift-portal': 'layershift-portal:ready',
+  'layershift-rack-focus': 'layershift-rack-focus:ready',
 };
 
 /** Map tag names to the model-progress event they fire. */
 const MODEL_PROGRESS_EVENTS: Record<string, string> = {
   'layershift-parallax': 'layershift-parallax:model-progress',
   'layershift-portal': 'layershift-portal:model-progress',
+  'layershift-rack-focus': 'layershift-rack-focus:model-progress',
 };
 
 /** Model download progress detail from the Web Component. */

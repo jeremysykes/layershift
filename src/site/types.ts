@@ -28,10 +28,11 @@ export interface VideoEntry {
   thumb?: string;
 }
 
-/** Categorized video manifest: parallax videos for scene effects, textural for portal. */
+/** Categorized video manifest: parallax, textural (portal), and rack-focus videos. */
 export interface VideoManifest {
   parallax: VideoEntry[];
   textural: VideoEntry[];
+  'rack-focus': VideoEntry[];
 }
 
 /* ------------------------------------------------------------------ */

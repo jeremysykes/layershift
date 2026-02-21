@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import type { VideoEntry, VideoManifest } from '../types';
 
 /** Map effect IDs to the video category they should use. */
-const EFFECT_VIDEO_CATEGORY: Record<string, 'parallax' | 'textural'> = {
+const EFFECT_VIDEO_CATEGORY: Record<string, 'parallax' | 'textural' | 'rack-focus'> = {
   parallax: 'parallax',
+  'rack-focus': 'rack-focus',
   portal: 'textural',
-  'tilt-shift': 'parallax',
 };
 
 /**

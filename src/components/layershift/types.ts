@@ -251,3 +251,100 @@ export interface LayershiftPortalEventMap {
   'layershift-portal:error': CustomEvent<LayershiftPortalErrorDetail>;
   'layershift-portal:model-progress': CustomEvent<LayershiftModelProgressDetail>;
 }
+
+// ---------------------------------------------------------------------------
+// Rack Focus Effect Types
+// ---------------------------------------------------------------------------
+
+/** Props for the <layershift-rack-focus> Web Component. */
+export interface LayershiftRackFocusProps {
+  src: string;
+  depthSrc: string;
+  depthMeta: string;
+  depthModel?: string;
+  sourceType?: 'video' | 'image' | 'camera';
+  focusMode?: 'auto' | 'pointer' | 'scroll' | 'programmatic';
+  focusDepth?: number;
+  focusRange?: number;
+  transitionSpeed?: number;
+  aperture?: number;
+  maxBlur?: number;
+  depthScale?: number;
+  highlightBloom?: boolean;
+  highlightThreshold?: number;
+  focusBreathing?: number;
+  vignette?: number;
+  quality?: 'auto' | 'high' | 'medium' | 'low';
+  gpuBackend?: 'auto' | 'webgpu' | 'webgl2';
+  autoplay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  className?: string;
+  style?: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// Rack Focus Custom Event Detail Types
+// ---------------------------------------------------------------------------
+
+/** Fired once after rack focus initialization completes. */
+export interface RackFocusReadyDetail {
+  videoWidth: number;
+  videoHeight: number;
+  duration: number;
+  depthProfile?: import('../../depth-analysis').DepthProfile;
+  derivedFocusParams?: import('../../depth-analysis').DerivedFocusParams;
+  initialFocusDepth: number;
+}
+
+/** Fired when the focus target changes. */
+export interface RackFocusFocusChangeDetail {
+  targetDepth: number;
+  transitionDuration: number;
+  source: 'pointer' | 'touch' | 'scroll' | 'api' | 'auto';
+}
+
+/** Fired when the spring settles at the target focus depth. */
+export interface RackFocusFocusSettledDetail {
+  focalDepth: number;
+}
+
+/** Fired when rack focus video starts playing. */
+export interface RackFocusPlayDetail {
+  currentTime: number;
+}
+
+/** Fired when rack focus video pauses. */
+export interface RackFocusPauseDetail {
+  currentTime: number;
+}
+
+/** Fired when rack focus video loops. */
+export interface RackFocusLoopDetail {
+  loopCount: number;
+}
+
+/** Fired on each new rack focus video frame. */
+export interface RackFocusFrameDetail {
+  currentTime: number;
+  frameNumber: number;
+}
+
+/** Fired on rack focus initialization errors. */
+export interface RackFocusErrorDetail {
+  message: string;
+}
+
+/**
+ * Map of all custom events dispatched by `<layershift-rack-focus>`.
+ */
+export interface LayershiftRackFocusEventMap {
+  'layershift-rack-focus:ready': CustomEvent<RackFocusReadyDetail>;
+  'layershift-rack-focus:focus-change': CustomEvent<RackFocusFocusChangeDetail>;
+  'layershift-rack-focus:focus-settled': CustomEvent<RackFocusFocusSettledDetail>;
+  'layershift-rack-focus:play': CustomEvent<RackFocusPlayDetail>;
+  'layershift-rack-focus:pause': CustomEvent<RackFocusPauseDetail>;
+  'layershift-rack-focus:loop': CustomEvent<RackFocusLoopDetail>;
+  'layershift-rack-focus:frame': CustomEvent<RackFocusFrameDetail>;
+  'layershift-rack-focus:error': CustomEvent<RackFocusErrorDetail>;
+}

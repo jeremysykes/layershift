@@ -11,7 +11,7 @@ beforeEach(() => {
       { id: 'parallax', label: 'Depth Parallax', enabled: true },
       { id: 'portal', label: 'Portal', enabled: true },
     ],
-    videos: { parallax: [], textural: [] },
+    videos: { parallax: [], textural: [], 'rack-focus': [] },
     isInitialized: true,
     selectedVideoId: null,
   });

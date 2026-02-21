@@ -34,7 +34,7 @@ interface SiteActions {
 export const useSiteStore = create<SiteState & SiteActions>((set) => ({
   activeEffect: 'parallax',
   effects: [],
-  videos: { parallax: [], textural: [] },
+  videos: { parallax: [], textural: [], 'rack-focus': [] },
   isInitialized: false,
   selectedVideoId: null,
 

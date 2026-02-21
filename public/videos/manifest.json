@@ -6,7 +6,8 @@
 			"src": "/videos/parallax/fashion-rain/video.mp4",
 			"depthSrc": "/videos/parallax/fashion-rain/depth-data.bin",
 			"depthMeta": "/videos/parallax/fashion-rain/depth-meta.json",
-			"thumb": "/videos/parallax/fashion-rain/thumb.jpg"
+			"thumb": "/videos/parallax/fashion-rain/thumb.jpg",
+			"prompt": "Fashion Rain - Close-up portrait of a woman, shoulders and face, shallow depth of field. Heavy rain falling in slow motion between the camera and the subject. Wet skin catching warm light. Blurred neon city lights reflecting on wet pavement in the far background. Slow subtle camera drift, anamorphic lens, cinematic, 24fps."
 		},
 		{
 			"id": "sneaker-drop",
@@ -14,7 +15,8 @@
 			"src": "/videos/parallax/sneaker-drop/video.mp4",
 			"depthSrc": "/videos/parallax/sneaker-drop/depth-data.bin",
 			"depthMeta": "/videos/parallax/sneaker-drop/depth-meta.json",
-			"thumb": "/videos/parallax/sneaker-drop/thumb.jpg"
+			"thumb": "/videos/parallax/sneaker-drop/thumb.jpg",
+			"prompt": "Sneaker Drop - Single high-end sneaker suspended mid-air, rotating slowly. Particles and dust motes catching volumetric light beams around it. Deep black background. The shoe is sharp in the foreground, particles drift at mid-depth, light beams recede into the far background. Slow orbit, cinematic lighting, 24fps."
 		},
 		{
 			"id": "luxury-perfume",
@@ -22,7 +24,8 @@
 			"src": "/videos/parallax/luxury-perfume/video.mp4",
 			"depthSrc": "/videos/parallax/luxury-perfume/depth-data.bin",
 			"depthMeta": "/videos/parallax/luxury-perfume/depth-meta.json",
-			"thumb": "/videos/parallax/luxury-perfume/thumb.jpg"
+			"thumb": "/videos/parallax/luxury-perfume/thumb.jpg",
+			"prompt": "Luxury Perfume - Glass perfume bottle on dark marble surface, wisps of golden mist drifting behind it. Blurred cityscape through floor-to-ceiling windows in the deep background. Shallow depth of field, warm studio lighting, slow subtle camera push-in. Cinematic, 24fps."
 		},
 		{
 			"id": "canyon-car",
@@ -30,7 +33,8 @@
 			"src": "/videos/parallax/canyon-car/video.mp4",
 			"depthSrc": "/videos/parallax/canyon-car/depth-data.bin",
 			"depthMeta": "/videos/parallax/canyon-car/depth-meta.json",
-			"thumb": "/videos/parallax/canyon-car/thumb.jpg"
+			"thumb": "/videos/parallax/canyon-car/thumb.jpg",
+			"prompt": "Canyon Car - Car hood and grille in sharp foreground, desert road stretching into red rock canyon walls. Heat haze distortion in the deep distance. Golden hour lighting, long shadows. Slow dolly forward, shallow depth of field, anamorphic lens, cinematic, 24fps."
 		},
 		{
 			"id": "modern-interior",
@@ -38,7 +42,8 @@
 			"src": "/videos/parallax/modern-interior/video.mp4",
 			"depthSrc": "/videos/parallax/modern-interior/depth-data.bin",
 			"depthMeta": "/videos/parallax/modern-interior/depth-meta.json",
-			"thumb": "/videos/parallax/modern-interior/thumb.jpg"
+			"thumb": "/videos/parallax/modern-interior/thumb.jpg",
+			"prompt": "Architectural Interior - Looking through a modern glass doorframe in the foreground into a sunlit open-plan living space. Floor-to-ceiling windows showing mountains beyond. Three clear depth layers. Slow gentle camera drift, natural light, shallow depth of field, cinematic, 24fps."
 		},
 		{
 			"id": "whiskey-glass",
@@ -46,7 +51,8 @@
 			"src": "/videos/parallax/whiskey-glass/video.mp4",
 			"depthSrc": "/videos/parallax/whiskey-glass/depth-data.bin",
 			"depthMeta": "/videos/parallax/whiskey-glass/depth-meta.json",
-			"thumb": "/videos/parallax/whiskey-glass/thumb.jpg"
+			"thumb": "/videos/parallax/whiskey-glass/thumb.jpg",
+			"prompt": "Cocktail Bar - Whiskey glass with a single ice sphere in sharp focus, backlit amber liquid catching warm light. Blurred moody bar interior behind it with bokeh lights glowing. Slow orbit around the glass, shallow depth of field, warm tones, cinematic lighting, 24fps."
 		},
 		{
 			"id": "tech-product",
@@ -54,7 +60,8 @@
 			"src": "/videos/parallax/tech-product/video.mp4",
 			"depthSrc": "/videos/parallax/tech-product/depth-data.bin",
 			"depthMeta": "/videos/parallax/tech-product/depth-meta.json",
-			"thumb": "/videos/parallax/tech-product/thumb.jpg"
+			"thumb": "/videos/parallax/tech-product/thumb.jpg",
+			"prompt": "Tech Product - Minimalist desk scene, glowing screen casting soft blue light on dark wood surface. Blurred background with green plants, warm amber desk lamp, bokeh lights. Shallow depth of field, rack focus, slow gentle parallax drift, cinematic color grading, 24fps, photorealistic."
 		},
 		{
 			"id": "test-image",
@@ -62,7 +69,8 @@
 			"src": "/videos/parallax/test-image/test-image.jpeg",
 			"depthSrc": "/videos/parallax/test-image/depth-data.bin",
 			"depthMeta": "/videos/parallax/test-image/depth-meta.json",
-			"thumb": "/videos/parallax/test-image/thumb.jpg"
+			"thumb": "/videos/parallax/test-image/thumb.jpg",
+			"prompt": "Test Image - Test image for depth mapping validation."
 		}
 	],
 	"textural": [
@@ -72,7 +80,8 @@
 			"src": "/videos/textural/liquid-chrome/video.mp4",
 			"depthSrc": "/videos/textural/liquid-chrome/depth-data.bin",
 			"depthMeta": "/videos/textural/liquid-chrome/depth-meta.json",
-			"thumb": "/videos/textural/liquid-chrome/thumb.jpg"
+			"thumb": "/videos/textural/liquid-chrome/thumb.jpg",
+			"prompt": "Liquid Chrome Morph System - Ultra stylized macro animation of reflective chrome forms slowly reshaping and sliding across one another, high contrast studio lighting, strong rim highlights, abstract luxury motion design aesthetic, layered depth composition, seamless loop friendly."
 		},
 		{
 			"id": "neon-energy",
@@ -80,7 +89,8 @@
 			"src": "/videos/textural/neon-energy/video.mp4",
 			"depthSrc": "/videos/textural/neon-energy/depth-data.bin",
 			"depthMeta": "/videos/textural/neon-energy/depth-meta.json",
-			"thumb": "/videos/textural/neon-energy/thumb.jpg"
+			"thumb": "/videos/textural/neon-energy/thumb.jpg",
+			"prompt": "Neon Energy Geometry - Glowing neon light ribbons weaving through layered geometric structures, dark background with volumetric haze, strong foreground elements crossing frame, saturated electric colors, cinematic motion design style, high depth separation."
 		},
 		{
 			"id": "test-image",
@@ -88,7 +98,91 @@
 			"src": "/videos/parallax/test-image/test-image.jpeg",
 			"depthSrc": "/videos/parallax/test-image/depth-data.bin",
 			"depthMeta": "/videos/parallax/test-image/depth-meta.json",
-			"thumb": "/videos/parallax/test-image/thumb.jpg"
+			"thumb": "/videos/parallax/test-image/thumb.jpg",
+			"prompt": "Test Image - Test image for depth mapping validation."
+		}
+	],
+	"rack-focus": [
+		{
+			"id": "brand-campaign-frame",
+			"type": "video",
+			"src": "/videos/rack-focus/brand-campaign-frame/video.mp4",
+			"depthSrc": "/videos/rack-focus/brand-campaign-frame/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/brand-campaign-frame/depth-meta.json",
+			"thumb": "/videos/rack-focus/brand-campaign-frame/thumb.jpg",
+			"prompt": "Brand Campaign Frame (Commercial Framing) - Luxury brand campaign-style shot with a foreground subject sharply defined, background gently diffused into creamy bokeh, controlled studio lighting, subtle highlight accents, neutral tones, static camera, composed posture, high-end editorial aesthetic, seamless loop, no motion."
+		},
+		{
+			"id": "product-in-context",
+			"type": "video",
+			"src": "/videos/rack-focus/product-in-context/video.mp4",
+			"depthSrc": "/videos/rack-focus/product-in-context/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/product-in-context/depth-meta.json",
+			"thumb": "/videos/rack-focus/product-in-context/thumb.jpg",
+			"prompt": "Product in Context — Multi-Depth - Product placed in a realistic environment with foreground emphasis, midground contextual elements, background depth recession, clean lighting gradients, smooth bokeh highlights in background, no harsh shadows, static composition, cinematic commercial aesthetic, seamless loop, no motion."
+		},
+		{
+			"id": "retail-environment",
+			"type": "video",
+			"src": "/videos/rack-focus/retail-environment/video.mp4",
+			"depthSrc": "/videos/rack-focus/retail-environment/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/retail-environment/depth-meta.json",
+			"thumb": "/videos/rack-focus/retail-environment/thumb.jpg",
+			"prompt": "Retail Environment - High-end retail interior with foreground product display, layered depth through shelving and space, controlled lighting, shallow depth cues, premium brand visual merchandising aesthetic, static camera, seamless loop."
+		},
+		{
+			"id": "nature-foreground-subject",
+			"type": "video",
+			"src": "/videos/rack-focus/nature-foreground-subject/video.mp4",
+			"depthSrc": "/videos/rack-focus/nature-foreground-subject/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/nature-foreground-subject/depth-meta.json",
+			"thumb": "/videos/rack-focus/nature-foreground-subject/thumb.jpg",
+			"prompt": "Nature Foreground Subject - Cinematic nature shot with foreground foliage sharply defined, midground path, background softly blurred forest, natural sunlight creating bokeh highlights, calm atmosphere, static camera, realistic color grading, seamless loop."
+		},
+		{
+			"id": "editorial-still-life",
+			"type": "video",
+			"src": "/videos/rack-focus/editorial-still-life/video.mp4",
+			"depthSrc": "/videos/rack-focus/editorial-still-life/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/editorial-still-life/depth-meta.json",
+			"thumb": "/videos/rack-focus/editorial-still-life/thumb.jpg",
+			"prompt": "Editorial Still Life - Editorial still life composition with a primary object in foreground focus, secondary objects at staggered depths, background softly blurred, studio lighting, neutral tones, premium magazine aesthetic, static camera, seamless loop."
+		},
+		{
+			"id": "urban-street-scene",
+			"type": "video",
+			"src": "/videos/rack-focus/urban-street-scene/video.mp4",
+			"depthSrc": "/videos/rack-focus/urban-street-scene/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/urban-street-scene/depth-meta.json",
+			"thumb": "/videos/rack-focus/urban-street-scene/thumb.jpg",
+			"prompt": "Urban Street Scene (Static) - Cinematic urban street shot with foreground subject or object close to camera, midground pedestrians or elements, background city lights softly blurred, subtle specular highlights, neutral grading, static camera, calm atmosphere, seamless loop."
+		},
+		{
+			"id": "geometric-depth-planes",
+			"type": "video",
+			"src": "/videos/rack-focus/geometric-depth-planes/video.mp4",
+			"depthSrc": "/videos/rack-focus/geometric-depth-planes/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/geometric-depth-planes/depth-meta.json",
+			"thumb": "/videos/rack-focus/geometric-depth-planes/thumb.jpg",
+			"prompt": "Geometric Depth Planes - Minimalist geometric composition featuring layered glass panels positioned at staggered depths, soft edge lighting, clean reflections, neutral color tones, controlled studio illumination, strong foreground to background separation, static camera, seamless loop."
+		},
+		{
+			"id": "object-lineup",
+			"type": "video",
+			"src": "/videos/rack-focus/object-lineup/video.mp4",
+			"depthSrc": "/videos/rack-focus/object-lineup/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/object-lineup/depth-meta.json",
+			"thumb": "/videos/rack-focus/object-lineup/thumb.jpg",
+			"prompt": "Object Lineup - Row of objects arranged at staggered depths from foreground to background, shallow depth of field cues, soft studio lighting, subtle highlights, static camera, premium product lineup photography, seamless loop."
+		},
+		{
+			"id": "test-image",
+			"type": "image",
+			"src": "/videos/rack-focus/test-image/test-image.jpeg",
+			"depthSrc": "/videos/rack-focus/test-image/depth-data.bin",
+			"depthMeta": "/videos/rack-focus/test-image/depth-meta.json",
+			"thumb": "/videos/rack-focus/test-image/thumb.jpg",
+			"prompt": "Test Image - Test image for depth mapping validation."
 		}
 	]
 }

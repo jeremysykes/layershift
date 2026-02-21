@@ -6,11 +6,13 @@ Layershift is a video effects library. Each effect ships as a self-contained Web
 
 **Parallax** (`<layershift-parallax>`) is the first effect — depth-aware parallax motion driven by mouse or gyroscope input using precomputed depth maps.
 
-**Portal** (`<layershift-portal>`) is the second effect — video revealed through an SVG-shaped cutout with depth-aware parallax, dimensional typography (JFA distance field, bevel lighting, geometric chamfer with Blinn-Phong shading, emissive interior), and depth-reactive boundary effects. Uses a multi-pass stencil + FBO compositing pipeline.
+**Rack Focus** (`<layershift-rack-focus>`) is the second effect — interactive depth-of-field with spring-damped focal plane control. Users rack focus via pointer/touch/scroll with cinematic bokeh blur using Poisson disc sampling and depth-aware bleeding prevention. Uses a 4-pass bilateral + CoC + DOF blur + composite pipeline. See [ADR-018](./adr/ADR-018-rack-focus-effect.md) for the design rationale.
 
-Both effects support dual GPU backends: **WebGPU** (preferred) and **WebGL 2** (fallback). Runtime feature detection in `gpu-backend.ts` selects the optimal backend automatically. Each renderer extends a shared `RendererBase` abstract class that provides common resize, UV, loop, and depth subsample logic. See [ADR-013](./adr/ADR-013-webgpu-renderer-path.md) for the design rationale.
+**Portal** (`<layershift-portal>`) is the third effect — video revealed through an SVG-shaped cutout with depth-aware parallax, dimensional typography (JFA distance field, bevel lighting, geometric chamfer with Blinn-Phong shading, emissive interior), and depth-reactive boundary effects. Uses a multi-pass stencil + FBO compositing pipeline.
 
-Both effects share core infrastructure (input handling, video loading, depth system, build pipeline).
+All effects support dual GPU backends: **WebGPU** (preferred) and **WebGL 2** (fallback). Runtime feature detection in `gpu-backend.ts` selects the optimal backend automatically. Each renderer extends a shared `RendererBase` abstract class that provides common resize, UV, loop, and depth subsample logic. See [ADR-013](./adr/ADR-013-webgpu-renderer-path.md) for the design rationale.
+
+All effects share core infrastructure (input handling, video loading, depth system, build pipeline).
 
 See [system architecture diagram](./diagrams/system-architecture.md) for the visual library structure and dependency graph.
 
@@ -26,6 +28,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 |------|-------|---------|
 | `index.ts` | Library | Entry point, registers effect elements |
 | `layershift-element.ts` | Parallax | Parallax Web Component (Shadow DOM, lifecycle, events) |
+| `rack-focus-element.ts` | Rack Focus | Rack focus Web Component (Shadow DOM, lifecycle, spring focus, events) |
 | `portal-element.ts` | Portal | Portal Web Component (Shadow DOM, lifecycle, events) |
 | `types.ts` | Library | Public TypeScript interfaces |
 | `global.d.ts` | Library | JSX type augmentation |
@@ -43,6 +46,9 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | `gpu-backend.ts` | Shared | GPU backend feature detection — probes for WebGPU support, falls back to WebGL 2, exposes selected backend type to element components |
 | `parallax-renderer.ts` | Parallax | WebGL 2 parallax renderer with multi-pass architecture: bilateral filter pass + parallax pass, each a self-contained factory-created unit sharing a single fullscreen quad VAO. Extends `RendererBase` |
 | `parallax-renderer-webgpu.ts` | Parallax | WebGPU parallax renderer — equivalent pipeline to WebGL 2 version using compute/render passes and bind groups. Extends `RendererBase` |
+| `rack-focus-renderer.ts` | Rack Focus | WebGL 2 rack focus renderer with 4-pass pipeline: bilateral filter + CoC computation + Poisson disc DOF blur + composite. Extends `RendererBase` |
+| `rack-focus-renderer-webgpu.ts` | Rack Focus | WebGPU rack focus renderer — equivalent 4-pass pipeline using bind groups, override constants, r16float CoC. Extends `RendererBase` |
+| `focus-input-handler.ts` | Rack Focus | Focus-aware input handler: critically-damped spring, pointer/touch/scroll/programmatic modes, depth sampling, focus breathing |
 | `portal-renderer.ts` | Portal | WebGL 2 stencil + FBO renderer, multi-pass pipeline (interior FBO, stencil, JFA distance field, emissive composite, chamfer geometry, boundary effects). Extends `RendererBase` |
 | `portal-renderer-webgpu.ts` | Portal | WebGPU portal renderer — equivalent multi-pass pipeline using WebGPU render/compute passes, bind groups, and storage textures. Extends `RendererBase` |
 | `render-pass.ts` | Shared (WebGL 2) | WebGL 2 render pass framework: `RenderPass`, `FBOPass`, `TextureRegistry`, `createPass()`, `createFBOPass()`, `createMRTPass()` |
@@ -52,7 +58,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | `webgpu-utils.ts` | Shared (WebGPU) | WebGPU helpers: pipeline creation, bind group layout, buffer allocation, texture creation |
 | `jfa-distance-field.ts` | Shared | JFA distance field orchestration — extracted from portal renderer for reuse across backends and effects |
 | `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
-| `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
+| `depth-analysis.ts` | Parallax + Rack Focus | Adaptive parameter derivation from depth histograms (parallax params + focus params) |
 | `depth-estimator.ts` | Shared | Browser-based monocular depth estimation via ONNX Runtime Web (Depth Anything v2) — lazily loaded, double-buffered. **Experimental / deferred** — see [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md) |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, keyframe interpolation |
 | `input-handler.ts` | Shared | Mouse/gyro input with smoothing |
@@ -67,6 +73,8 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | Path | Scope | Purpose |
 |------|-------|---------|
 | `shaders/parallax/*.wgsl` (4 files) | Parallax (WebGPU) | WGSL parallax shaders — bilateral filter, parallax displacement, DOF, contrast |
+| `shaders/rack-focus/*.glsl` (4 files) | Rack Focus (WebGL 2) | GLSL rack focus shaders — vertex, CoC computation, Poisson DOF blur, composite |
+| `shaders/rack-focus/*.wgsl` (4 files) | Rack Focus (WebGPU) | WGSL rack focus shaders — vertex, CoC, DOF blur, composite |
 | `shaders/portal/*.wgsl` (9 files) | Portal (WebGPU) | WGSL portal shaders — interior, stencil, mask, JFA (seed/flood/distance), composite, chamfer, boundary |
 | `shaders/portal/*.glsl` (18 files) | Portal (WebGL 2) | Extracted GLSL portal shaders — previously inlined, now individual files for maintainability |
 
@@ -142,6 +150,73 @@ See [depth parameter derivation diagram](./diagrams/depth-parameter-derivation.m
 **Failure fallback:** Degenerate depth data produces exact calibrated defaults.
 
 **Override precedence:** `explicitConfig ?? derivedParams ?? calibratedDefaults`
+
+## Rack Focus Effect
+
+### Initialization
+
+See [rack focus initialization diagram](./diagrams/rack-focus-initialization.md) for the full sequence diagram.
+
+1. **Asset loading** (parallel): media source (video/image/camera) + binary depth data
+2. **Depth analysis** (sync, <5ms): histogram, percentiles, bimodality scoring
+3. **Focus parameter derivation** (sync, O(1)): `deriveFocusParams()` maps depth profile to autoFocusDepth, depthScale, focusRange
+4. **Config merge**: explicit attribute > derived > calibrated defaults
+5. **Depth interpolator**: synchronous keyframe interpolation on main thread
+6. **Backend detection**: `gpu-backend.ts` probes for WebGPU support; selects WebGPU or WebGL 2
+7. **Renderer setup**: Instantiate backend-appropriate renderer (both extend `RendererBase`). WebGL 2: 4-pass pipeline via factory functions, R16F CoC texture (RG8 fallback), Poisson sample count injected via `#define`. WebGPU: 4 render pipelines, bind groups, `r16float` CoC texture, `override` constant for Poisson samples
+8. **Focus input handler**: Create `FocusInputHandler` with spring dynamics and mode-specific listeners
+9. **Render loop start**: RAF + RVFC registration (managed by `RendererBase`)
+
+### Render Pipeline
+
+See [rack focus render pipeline diagram](./diagrams/rack-focus-render-pipeline.md) for the 4-pass architecture.
+
+Same dual-loop architecture as parallax and portal:
+- **RVFC** (~5fps): bilateral depth filter at depth frame rate
+- **RAF** (60-120fps): CoC computation + DOF blur + composite at display refresh rate
+
+4-pass GPU pipeline:
+
+1. **Bilateral filter** (RVFC rate): Edge-preserving depth smoothing. Reuses bilateral shader source from parallax effect. Quality-tiered kernel: 5x5 (high/medium) or 3x3 (low).
+2. **CoC computation** (RAF rate): Computes signed Circle of Confusion per pixel. Negative = foreground, positive = background, zero = in-focus. Reads focal depth, aperture, focus range from spring-animated uniforms. Applies focus breathing UV modification during transitions.
+3. **Poisson disc DOF blur** (RAF rate): Bokeh blur with depth-aware weighting. 48/32/16 samples (high/medium/low). Background-on-foreground bleeding prevention. Highlight bloom above luminance threshold.
+4. **Composite** (RAF rate): Smooth blend between sharp and blurred via `smoothstep(0.5, 2.0, |CoC|)`. Static vignette at frame edges.
+
+### Shader Uniforms
+
+| Uniform | Source | Updated |
+|---------|--------|---------|
+| uImage / video texture | Video frame (RGBA8) | Per RAF frame |
+| uFilteredDepth | Bilateral-filtered depth (R8) | Per RVFC frame |
+| uCocTexture | Signed CoC (R16F) | Per RAF frame |
+| uBlurredTexture | DOF-blurred color (RGBA8) | Per RAF frame |
+| uFocalDepth | FocusInputHandler spring | Per RAF frame |
+| uAperture | Config | Once at init |
+| uFocusRange | Derived/Config | Once at init |
+| uDepthScale | Derived/Config | Once at init |
+| uMaxBlurRadius | Config | Once at init |
+| uHighlightThreshold | Config | Once at init |
+| uBreathScale, uBreathOffset | FocusInputHandler | Per RAF frame |
+| uVignetteStrength | Config | Once at init |
+
+### Focus Input System
+
+`FocusInputHandler` manages focal plane control independently from the parallax `InputHandler`:
+
+- **Critically-damped spring**: No overshoot, monotonic approach, settle threshold 0.001
+- **Depth sampling**: 3x3 kernel average from CPU depth frame at pointer UV
+- **Four modes**: auto (pointer + revert), pointer (with click-lock), scroll (viewport-mapped), programmatic (API-only)
+- **Focus breathing**: Subtle UV zoom (`breathScale`, `breathOffset`) during transitions — adds cinematic weight
+- **Transition scaling**: Duration proportional to depth delta, clamped [60ms, 500ms]
+
+### Depth-Adaptive Focus Parameters
+
+`deriveFocusParams()` in `src/depth-analysis.ts` maps depth profile to 3 focus parameters:
+- `autoFocusDepth`: Histogram mode below 40th percentile (foreground subject)
+- `depthScale`: Inverse of effective range, clamped [30, 80]
+- `focusRange`: Wider for narrow-range scenes, clamped [0.02, 0.10]
+
+Same override precedence as parallax: `explicitConfig ?? derivedParams ?? calibratedDefaults`
 
 ## Portal Effect
 
@@ -220,6 +295,47 @@ Shadow DOM encapsulates a `<canvas>` (WebGPU or WebGL 2, selected at runtime) an
 | `layershift-parallax:error` | message |
 
 **Override detection:** `hasAttribute('parallax-max')` or `hasAttribute('overscan')` causes the explicit attribute to take precedence over depth-derived values.
+
+### Element: `<layershift-rack-focus>`
+
+Shadow DOM encapsulates a `<canvas>` (WebGPU or WebGL 2, selected at runtime) and hidden `<video>`.
+
+**Observed attributes:**
+- `src`, `depth-src`, `depth-meta` (required asset paths)
+- `depth-model` (ONNX model URL for live depth estimation — **experimental / deferred**)
+- `source-type` (source mode: `video` | `image` | `camera` — default `video`)
+- `focus-mode` (focus control: `auto` | `pointer` | `scroll` | `programmatic` — default `auto`)
+- `focus-depth`, `focus-range`, `transition-speed` (focus control tuning)
+- `aperture`, `max-blur`, `depth-scale` (blur intensity)
+- `highlight-bloom`, `highlight-threshold` (bokeh highlight boost)
+- `focus-breathing` (UV zoom during transitions)
+- `vignette` (edge darkening strength)
+- `quality`, `gpu-backend` (rendering quality and backend)
+- `autoplay`, `loop`, `muted` (video behavior)
+
+**JavaScript API:**
+
+| Property / Method | Description |
+|-------------------|-------------|
+| `focusDepth` (get/set) | Read/write focal depth [0,1] — triggers spring transition |
+| `transitioning` (get) | Whether the spring is currently animating |
+| `setFocusDepth(depth, opts?)` | Programmatic focus with optional custom duration |
+| `resetFocus()` | Revert to auto-determined focal depth |
+
+**Custom events** (composed, bubble through shadow boundary):
+
+| Event | Detail |
+|-------|--------|
+| `layershift-rack-focus:ready` | videoWidth, videoHeight, duration, depthProfile?, derivedFocusParams?, initialFocusDepth |
+| `layershift-rack-focus:focus-change` | targetDepth, transitionDuration, source |
+| `layershift-rack-focus:focus-settled` | focalDepth |
+| `layershift-rack-focus:play` | currentTime |
+| `layershift-rack-focus:pause` | currentTime |
+| `layershift-rack-focus:loop` | loopCount |
+| `layershift-rack-focus:frame` | currentTime, frameNumber |
+| `layershift-rack-focus:error` | message |
+
+See [rack focus overview](./rack-focus/rack-focus-overview.md) for full API reference.
 
 ### Element: `<layershift-portal>`
 
@@ -307,22 +423,24 @@ See [build system diagram](./diagrams/build-system.md) for the build flow diagra
 
 ### Component Build (vite.config.component.ts)
 
-Produces a single IIFE file with zero runtime dependencies. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>` or `<layershift-portal>` element.
+Produces a single IIFE file with zero runtime dependencies. No separate asset loading required. Drop-in: `<script src="layershift.js">` + `<layershift-parallax>`, `<layershift-portal>`, or `<layershift-rack-focus>` element.
 
 ## Performance Characteristics
 
-| Metric | Parallax | Portal |
-|--------|----------|--------|
-| Init depth analysis | <5ms | N/A |
-| SVG mesh generation | N/A | <10ms |
-| JFA distance field (on resize) | N/A | ~0.5ms (~13 draw calls, half-res) |
-| Bilateral filter per depth frame | <1ms (GPU shader pass) | <1ms (GPU shader pass) |
-| Render draw calls per frame | 1 | ~6 (interior FBO, stencil, composite, chamfer, boundary) |
-| Depth texture upload frequency | ~5fps (keyframe rate) | ~5fps (keyframe rate) |
-| Depth texture size | 512x512 Uint8 (~256KB) | 512x512 Uint8 (~256KB) |
-| Bundle size IIFE (gzipped) | ~19KB | ~29KB (combined) |
-| Runtime dependencies | None (WebGPU or WebGL 2) | None (WebGPU or WebGL 2) |
-| GPU backend selection | Automatic (WebGPU preferred, WebGL 2 fallback) | Automatic (WebGPU preferred, WebGL 2 fallback) |
+| Metric | Parallax | Rack Focus | Portal |
+|--------|----------|------------|--------|
+| Init depth analysis | <5ms | <5ms | N/A |
+| Focus param derivation | N/A | O(1), <1ms | N/A |
+| SVG mesh generation | N/A | N/A | <10ms |
+| JFA distance field (on resize) | N/A | N/A | ~0.5ms (~13 draw calls, half-res) |
+| Bilateral filter per depth frame | <1ms (GPU shader pass) | <1ms (GPU shader pass) | <1ms (GPU shader pass) |
+| Render draw calls per frame | 1 | 3 (CoC + DOF blur + composite) | ~6 (interior FBO, stencil, composite, chamfer, boundary) |
+| Poisson disc samples per pixel | N/A | 48 / 32 / 16 (high / medium / low) | N/A |
+| Depth texture upload frequency | ~5fps (keyframe rate) | ~5fps (keyframe rate) | ~5fps (keyframe rate) |
+| Depth texture size | 512x512 Uint8 (~256KB) | 512x512 Uint8 (~256KB) | 512x512 Uint8 (~256KB) |
+| Bundle size IIFE (gzipped) | ~19KB | ~29KB (combined) | ~29KB (combined) |
+| Runtime dependencies | None (WebGPU or WebGL 2) | None (WebGPU or WebGL 2) | None (WebGPU or WebGL 2) |
+| GPU backend selection | Automatic (WebGPU preferred, WebGL 2 fallback) | Automatic (WebGPU preferred, WebGL 2 fallback) | Automatic (WebGPU preferred, WebGL 2 fallback) |
 
 ## Documentation Map
 
@@ -365,6 +483,11 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [depth-derivation-architecture.md](./parallax/depth-derivation-architecture.md) | Depth subsystem integration details |
 | [depth-derivation-testability.md](./parallax/depth-derivation-testability.md) | Testing strategy and snapshot approach |
 | [depth-derivation-self-audit.md](./parallax/depth-derivation-self-audit.md) | Implementation verification audit |
+| **Rack Focus Effect** | |
+| [rack-focus-overview.md](./rack-focus/rack-focus-overview.md) | Effect overview, API reference, usage guide |
+| [rack-focus-render-pipeline.md](./diagrams/rack-focus-render-pipeline.md) | 4-pass render pipeline diagram |
+| [rack-focus-initialization.md](./diagrams/rack-focus-initialization.md) | Rack focus init sequence diagram |
+| [ADR-018](./adr/ADR-018-rack-focus-effect.md) | Dynamic rack focus effect design decisions |
 | **Portal Effect** | |
 | [portal-overview.md](./portal/portal-overview.md) | Effect overview, API reference, usage guide |
 | [portal-v2-design.md](./portal/portal-v2-design.md) | Historical v2 design document (dual-scene compositing) |

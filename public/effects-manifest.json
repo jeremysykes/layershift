@@ -8,15 +8,16 @@
       "enabled": true
     },
     {
+      "id": "rack-focus",
+      "label": "Rack Focus",
+      "shortLabel": "Focus",
+      "enabled": true
+    },
+    {
       "id": "portal",
       "label": "Logo Depth Portal",
       "shortLabel": "Logo",
       "enabled": true
-    },
-    {
-      "id": "tilt-shift",
-      "label": "Tilt Shift",
-      "enabled": false
     }
   ]
 }

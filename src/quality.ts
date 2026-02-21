@@ -35,6 +35,10 @@ export interface QualityParams {
   readonly bilateralRadius: number;
   /** JFA distance field resolution divisor (2 = half-res, 4 = quarter-res). */
   readonly jfaDivisor: number;
+  /** Poisson disc sample count for DOF blur (48 / 32 / 16). */
+  readonly poissonSamples: number;
+  /** DOF buffer resolution divisor (1 = full, 2 = half). */
+  readonly dofDivisor: number;
 }
 
 /** Raw device capability probe results. */
@@ -66,6 +70,8 @@ const TIER_PARAMS: Record<QualityTier, Omit<QualityParams, 'tier'>> = {
     pomSteps: 16,
     bilateralRadius: 2,
     jfaDivisor: 2,
+    poissonSamples: 48,
+    dofDivisor: 1,
   },
   medium: {
     dprCap: 1.5,
@@ -73,6 +79,8 @@ const TIER_PARAMS: Record<QualityTier, Omit<QualityParams, 'tier'>> = {
     pomSteps: 16,
     bilateralRadius: 2,
     jfaDivisor: 2,
+    poissonSamples: 32,
+    dofDivisor: 1,
   },
   low: {
     dprCap: 1.0,
@@ -80,6 +88,8 @@ const TIER_PARAMS: Record<QualityTier, Omit<QualityParams, 'tier'>> = {
     pomSteps: 8,
     bilateralRadius: 1,
     jfaDivisor: 4,
+    poissonSamples: 16,
+    dofDivisor: 2,
   },
 };
 

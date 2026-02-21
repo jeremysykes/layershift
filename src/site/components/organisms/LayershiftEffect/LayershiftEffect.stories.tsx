@@ -80,6 +80,18 @@ export const Portal: Story = {
   },
 };
 
+/** Rack Focus Web Component wrapper. */
+export const RackFocus: Story = {
+  args: {
+    tagName: 'layershift-rack-focus',
+    attrs: {
+      src: '/videos/rack-focus/test-image/video.mp4',
+      'depth-src': '/videos/rack-focus/test-image/depth-data.bin',
+      'depth-meta': '/videos/rack-focus/test-image/depth-meta.json',
+    },
+  },
+};
+
 /** With custom className and inline style. */
 export const WithCustomStyles: Story = {
   args: {

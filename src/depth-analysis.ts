@@ -441,6 +441,95 @@ function buildDegenerateProfile(histogram: Float32Array): DepthProfile {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Rack Focus parameter derivation
+// ---------------------------------------------------------------------------
+
+/**
+ * Focus parameters derived from depth analysis.
+ * Used when focus-mode is 'auto' and no explicit focus-depth is set.
+ */
+export interface DerivedFocusParams {
+  /** Auto-focus initial depth [0,1]. Foreground cluster center. */
+  autoFocusDepth: number;
+  /** Depth scale factor for CoC computation. Wider range → larger scale. */
+  depthScale: number;
+  /** Suggested focus range (flat sharp zone width). */
+  focusRange: number;
+}
+
+/** Calibrated defaults for focus parameters. */
+const FOCUS_PARAM_DEFAULTS: Readonly<DerivedFocusParams> = {
+  autoFocusDepth: 0.3,
+  depthScale: 50.0,
+  focusRange: 0.05,
+};
+
+/**
+ * Derive rack focus parameters from a depth profile.
+ *
+ * Auto-focus depth: the mode of the depth histogram below the 40th percentile.
+ * Targets the foreground cluster — the most likely subject of interest.
+ *
+ * Depth scale: maps effective depth range to CoC scaling. Wider ranges need
+ * less scaling; narrower ranges need more to create visible blur.
+ *
+ * Focus range: wider for narrow-range scenes, narrower for wide-range scenes.
+ *
+ * Runs once at initialization, never during rendering.
+ * Same input always produces same output (deterministic).
+ */
+export function deriveFocusParams(profile: DepthProfile): DerivedFocusParams {
+  // Rejection: degenerate depth → calibrated defaults.
+  if (profile.effectiveRange < 0.05 || profile.stdDev < 0.02) {
+    return { ...FOCUS_PARAM_DEFAULTS };
+  }
+
+  // --- autoFocusDepth ---
+  // Find the mode (tallest bin) in the foreground region (below 40th percentile).
+  const cdf = buildCDF(profile.histogram);
+  const p40 = findPercentile(cdf, 0.40);
+  const p40Bin = Math.min(255, Math.round(p40 * 255));
+  let maxBin = 0;
+  let maxHeight = 0;
+  for (let i = 0; i <= p40Bin; i++) {
+    if (profile.histogram[i] > maxHeight) {
+      maxHeight = profile.histogram[i];
+      maxBin = i;
+    }
+  }
+  // 3-bin average around the mode for stability.
+  let sum = 0;
+  let count = 0;
+  for (let i = Math.max(0, maxBin - 1); i <= Math.min(255, maxBin + 1); i++) {
+    sum += (i / 255) * profile.histogram[i];
+    count += profile.histogram[i];
+  }
+  const autoFocusDepth = count > 0 ? clamp(sum / count, 0.05, 0.95) : 0.3;
+
+  // --- depthScale ---
+  const depthScale = clamp(25.0 / profile.effectiveRange, 30.0, 80.0);
+
+  // --- focusRange ---
+  const focusRange = clamp(0.03 + (0.50 - profile.effectiveRange) * 0.04, 0.02, 0.10);
+
+  return { autoFocusDepth, depthScale, focusRange };
+}
+
+/** Build a CDF from a normalized histogram. */
+function buildCDF(histogram: Float32Array): Float32Array {
+  const cdf = new Float32Array(256);
+  cdf[0] = histogram[0];
+  for (let i = 1; i < 256; i++) {
+    cdf[i] = cdf[i - 1] + histogram[i];
+  }
+  return cdf;
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
