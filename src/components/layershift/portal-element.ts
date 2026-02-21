@@ -26,6 +26,7 @@ import { PortalRendererWebGPU } from '../../portal-renderer-webgpu';
 import { detectGPUBackend } from '../../gpu-backend';
 import { createVideoSource, createImageSource, createCameraSource, type MediaSource } from '../../media-source';
 import { generateMeshFromSVG, type ShapeMesh } from '../../shape-generator';
+import { createDepthEstimator, type DepthEstimator } from '../../depth-estimator';
 import type { ParallaxInput } from '../../input-handler';
 import type {
   LayershiftPortalReadyDetail,
@@ -34,6 +35,7 @@ import type {
   LayershiftPortalLoopDetail,
   LayershiftPortalFrameDetail,
   LayershiftPortalErrorDetail,
+  LayershiftModelProgressDetail,
 } from './types';
 import { LifecycleManager } from './lifecycle';
 import type { ManagedElement } from './lifecycle';
@@ -95,6 +97,10 @@ const DEFAULTS = {
   loop: true,
   muted: true,
 } as const;
+
+/** Default depth estimation output dimensions (matches precomputed convention). */
+const DEPTH_EST_WIDTH = 512;
+const DEPTH_EST_HEIGHT = 512;
 
 // ---------------------------------------------------------------------------
 // Input handler (reused from layershift-element.ts — same logic)
@@ -236,7 +242,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
 
   static get observedAttributes(): string[] {
     return [
-      'src', 'depth-src', 'depth-meta', 'logo-src', 'source-type',
+      'src', 'depth-src', 'depth-meta', 'depth-model', 'logo-src', 'source-type',
       'parallax-x', 'parallax-y', 'parallax-max', 'overscan', 'pom-steps',
       'quality', 'gpu-backend',
       'rim-intensity', 'rim-color', 'rim-width',
@@ -256,14 +262,15 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     ];
   }
 
-  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'logo-src', 'source-type'];
+  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'depth-model', 'logo-src', 'source-type'];
 
   canInit(): boolean {
-    if (this.sourceType === 'camera') return !!this.getAttribute('logo-src');
-    return !!this.getAttribute('src')
-      && !!this.getAttribute('depth-src')
-      && !!this.getAttribute('depth-meta')
-      && !!this.getAttribute('logo-src');
+    const hasLogo = !!this.getAttribute('logo-src');
+    if (this.sourceType === 'camera') return hasLogo;
+    const hasSrc = !!this.getAttribute('src');
+    const hasPrecomputedDepth = !!this.getAttribute('depth-src') && !!this.getAttribute('depth-meta');
+    const hasDepthModel = !!this.getAttribute('depth-model');
+    return hasSrc && hasLogo && (hasPrecomputedDepth || hasDepthModel);
   }
 
   private shadow: ShadowRoot;
@@ -271,6 +278,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
   private renderer: PortalRenderer | PortalRendererWebGPU | null = null;
   private inputHandler: ComponentInputHandler | null = null;
   private source: MediaSource | null = null;
+  private depthEstimator: DepthEstimator | null = null;
   private mesh: ShapeMesh | null = null;
   private loopCount = 0;
   private readonly lifecycle: LifecycleManager;
@@ -376,6 +384,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
   private get edgeOcclusionWidth(): number { return this.getAttrFloat('edge-occlusion-width', DEFAULTS.edgeOcclusionWidth); }
   private get edgeOcclusionStrength(): number { return this.getAttrFloat('edge-occlusion-strength', DEFAULTS.edgeOcclusionStrength); }
   private get lightDirection3(): [number, number, number] { return this.getAttrVec3('light-direction', DEFAULTS.lightDirection); }
+  private get depthModel(): string | null { return this.getAttribute('depth-model'); }
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
   private get shouldMute(): boolean { return this.getAttrBool('muted', DEFAULTS.muted); }
@@ -470,11 +479,18 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     if (!this.container) return;
 
     const isCamera = this.sourceType === 'camera';
+    const modelUrl = this.depthModel;
 
     try {
       let source: MediaSource;
       let depthData: PrecomputedDepthData;
       let mesh: ShapeMesh;
+      let estimator: DepthEstimator | null = null;
+
+      // Progress callback for model download — emits events on the host element.
+      const onModelProgress = (p: import('../../depth-estimator').ModelDownloadProgress) => {
+        this.emit<LayershiftModelProgressDetail>('layershift-portal:model-progress', p);
+      };
 
       if (isCamera) {
         const [cameraSource, shapeMesh] = await Promise.all([
@@ -486,43 +502,97 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         ]);
         if (signal.aborted) { cameraSource.dispose(); return; }
         source = cameraSource;
-        depthData = createFlatDepthData(source.width, source.height);
         mesh = shapeMesh;
+
+        if (modelUrl) {
+          estimator = await createDepthEstimator(modelUrl, DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT, onModelProgress);
+          if (signal.aborted) { estimator.dispose(); source.dispose(); return; }
+          depthData = createFlatDepthData(DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT);
+        } else {
+          depthData = createFlatDepthData(source.width, source.height);
+        }
       } else {
         const src = this.getAttribute('src')!;
-        const depthSrc = this.getAttribute('depth-src')!;
-        const depthMeta = this.getAttribute('depth-meta')!;
+        const depthSrc = this.getAttribute('depth-src');
+        const depthMeta = this.getAttribute('depth-meta');
+        const hasPrecomputedDepth = !!depthSrc && !!depthMeta;
 
         const isImage = this.sourceType === 'image'
           || /\.(jpe?g|png|webp|gif|avif|bmp)(\?|$)/i.test(src);
 
-        const [mediaResult, loadedDepth, shapeMesh] = await Promise.all([
-          isImage
-            ? createImageSource(src)
-            : createVideoSource(src, {
-                parent: this.shadow,
-                loop: this.shouldLoop,
-                muted: this.shouldMute,
-              }),
-          loadPrecomputedDepth(depthSrc, depthMeta),
-          generateMeshFromSVG(logoSrc),
-        ]);
+        if (hasPrecomputedDepth) {
+          const [mediaResult, loadedDepth, shapeMesh] = await Promise.all([
+            isImage
+              ? createImageSource(src)
+              : createVideoSource(src, {
+                  parent: this.shadow,
+                  loop: this.shouldLoop,
+                  muted: this.shouldMute,
+                }),
+            loadPrecomputedDepth(depthSrc!, depthMeta!),
+            generateMeshFromSVG(logoSrc),
+          ]);
 
-        if (signal.aborted) { mediaResult.dispose(); return; }
-        source = mediaResult;
-        depthData = loadedDepth;
-        mesh = shapeMesh;
+          if (signal.aborted) { mediaResult.dispose(); return; }
+          source = mediaResult;
+          depthData = loadedDepth;
+          mesh = shapeMesh;
+        } else if (modelUrl) {
+          const [mediaResult, est, shapeMesh] = await Promise.all([
+            isImage
+              ? createImageSource(src)
+              : createVideoSource(src, {
+                  parent: this.shadow,
+                  loop: this.shouldLoop,
+                  muted: this.shouldMute,
+                }),
+            createDepthEstimator(modelUrl, DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT, onModelProgress),
+            generateMeshFromSVG(logoSrc),
+          ]);
+
+          if (signal.aborted) { mediaResult.dispose(); est.dispose(); return; }
+          source = mediaResult;
+          estimator = est;
+          mesh = shapeMesh;
+
+          if (isImage || !source.isLive) {
+            const imgSrc = source.getImageSource();
+            if (imgSrc) {
+              const depthFrame = await estimator.submitFrameAndWait(imgSrc);
+              depthData = {
+                meta: { frameCount: 1, fps: 1, width: DEPTH_EST_WIDTH, height: DEPTH_EST_HEIGHT, sourceFps: 1 },
+                frames: [depthFrame],
+              };
+            } else {
+              depthData = createFlatDepthData(DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT);
+            }
+          } else {
+            depthData = createFlatDepthData(DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT);
+          }
+        } else {
+          throw new Error('Either depth-src/depth-meta or depth-model must be provided.');
+        }
       }
 
       this.source = source;
+      this.depthEstimator = estimator;
       this.mesh = mesh;
       this.loopCount = 0;
       this.attachSourceEventListeners(source);
 
-      const parallaxStrength = this.parallaxMax / Math.max(source.width, 1);
+      // Use viewport (container) width so that parallax-max produces
+      // consistent visual displacement regardless of source resolution.
+      const viewportWidth = this.container?.clientWidth || source.width;
+      const parallaxStrength = this.parallaxMax / Math.max(viewportWidth, 1);
 
-      const interpolator = new DepthFrameInterpolator(depthData);
-      const readDepth = (timeSec: number) => interpolator.sample(timeSec);
+      // Depth read callback: use estimator if available, otherwise interpolator.
+      let readDepth: (timeSec: number) => Uint8Array;
+      if (estimator) {
+        readDepth = () => estimator!.getLatestDepth();
+      } else {
+        const interpolator = new DepthFrameInterpolator(depthData);
+        readDepth = (timeSec: number) => interpolator.sample(timeSec);
+      }
 
       const config: PortalRendererConfig = {
         parallaxStrength,
@@ -583,6 +653,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
 
       const pxFactor = this.parallaxX;
       const pyFactor = this.parallaxY;
+      const currentEstimator = estimator;
 
       this.renderer.start(
         source,
@@ -593,6 +664,10 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
           return { x: raw.x * pxFactor, y: raw.y * pyFactor };
         },
         (currentTime: number, frameNumber: number) => {
+          if (currentEstimator) {
+            const imgSrc = source.getImageSource();
+            if (imgSrc) currentEstimator.submitFrame(imgSrc);
+          }
           this.emit<LayershiftPortalFrameDetail>('layershift-portal:frame', {
             currentTime,
             frameNumber,
@@ -628,6 +703,9 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
+
+    this.depthEstimator?.dispose();
+    this.depthEstimator = null;
 
     this.source?.dispose();
     this.source = null;

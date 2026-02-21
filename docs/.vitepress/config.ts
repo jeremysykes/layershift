@@ -85,6 +85,16 @@ export default withMermaid(
             { text: 'ADR-011: Render Pass Framework', link: '/adr/ADR-011-shared-render-pass-framework' },
             { text: 'ADR-012: Adaptive Quality', link: '/adr/ADR-012-adaptive-quality-scaling' },
             { text: 'ADR-013: WebGPU Renderer', link: '/adr/ADR-013-webgpu-renderer-path' },
+            { text: 'ADR-014: Browser Depth Estimation', link: '/adr/ADR-014-browser-depth-estimation' },
+            { text: 'ADR-015: Depth Model Selection', link: '/adr/ADR-015-depth-model-variant-selection' },
+            { text: 'ADR-016: Deferred Image/Webcam', link: '/adr/ADR-016-deferred-image-webcam-source-support' },
+          ],
+        },
+        {
+          text: 'Product',
+          items: [
+            { text: 'Roadmap', link: '/product/roadmap' },
+            { text: 'Webcam Integration Design', link: '/product/features/webcam-integration-design' },
           ],
         },
       ],

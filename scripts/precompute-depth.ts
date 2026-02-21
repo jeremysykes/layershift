@@ -17,6 +17,9 @@ const DEPTH_MODEL = 'Xenova/depth-anything-small-hf';
 const OUTPUT_WIDTH = 512;
 const OUTPUT_HEIGHT = 512;
 
+/** Image file extensions that trigger single-frame (static) mode. */
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|avif|bmp|tiff?)$/i;
+
 type DepthEstimator = Awaited<ReturnType<typeof pipeline<'depth-estimation'>>>;
 
 interface DepthModelOutput {
@@ -38,10 +41,74 @@ void main().catch((error: unknown) => {
 });
 
 async function main(): Promise<void> {
+  const inputPath = resolve(process.argv[2] ?? './public/sample.mp4');
+  const outputDir = resolve(process.argv[3] ?? './public');
+
+  const isImage = IMAGE_EXTENSIONS.test(inputPath);
+  if (isImage) {
+    await processImage(inputPath, outputDir);
+  } else {
+    await processVideo(inputPath, outputDir);
+  }
+}
+
+/**
+ * Single-frame depth for a static image.
+ * No ffmpeg needed — runs depth estimation directly on the image file.
+ */
+async function processImage(imagePath: string, outputDir: string): Promise<void> {
+  const depthDataPath = join(outputDir, 'depth-data.bin');
+  const depthMetaPath = join(outputDir, 'depth-meta.json');
+
+  await mkdir(outputDir, { recursive: true });
+
+  console.log(`Loading depth model (${DEPTH_MODEL})...`);
+  env.allowLocalModels = false;
+  env.useBrowserCache = false;
+  const estimator = await pipeline('depth-estimation', DEPTH_MODEL);
+
+  console.log(`Processing image: ${imagePath}...`);
+  const depthFrame = await computeDepthFrame(estimator, imagePath);
+  const bytesPerFrame = OUTPUT_WIDTH * OUTPUT_HEIGHT;
+
+  if (depthFrame.byteLength !== bytesPerFrame) {
+    throw new Error(
+      `Depth frame has invalid length ${depthFrame.byteLength}, expected ${bytesPerFrame}.`
+    );
+  }
+
+  // Write single-frame depth binary (4-byte header + one frame).
+  const depthDataFile = await open(depthDataPath, 'w');
+  try {
+    const headerBytes = new Uint8Array(4);
+    const header = new DataView(headerBytes.buffer, headerBytes.byteOffset, headerBytes.byteLength);
+    header.setUint32(0, 1, true); // frameCount = 1
+    await depthDataFile.write(headerBytes);
+    await depthDataFile.write(depthFrame);
+  } finally {
+    await depthDataFile.close();
+  }
+
+  const meta: DepthMetaFile = {
+    frameCount: 1,
+    fps: 1,
+    width: OUTPUT_WIDTH,
+    height: OUTPUT_HEIGHT,
+    sourceFps: 1,
+  };
+
+  await writeFile(depthMetaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
+  console.log(`Wrote ${depthDataPath}`);
+  console.log(`Wrote ${depthMetaPath}`);
+}
+
+/**
+ * Multi-frame depth for a video source.
+ * Extracts frames via ffmpeg and processes each one.
+ */
+async function processVideo(inputVideoPath: string, outputDir: string): Promise<void> {
   await ensureFfmpegAvailable();
 
-  const inputVideoPath = resolve(process.argv[2] ?? './public/sample.mp4');
-  const outputDir = resolve(process.argv[3] ?? './public');
   const depthDataPath = join(outputDir, 'depth-data.bin');
   const depthMetaPath = join(outputDir, 'depth-meta.json');
 

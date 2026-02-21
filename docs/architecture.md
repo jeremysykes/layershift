@@ -53,6 +53,7 @@ Modules are annotated as **effect-specific** or **shared** (reusable by future e
 | `jfa-distance-field.ts` | Shared | JFA distance field orchestration — extracted from portal renderer for reuse across backends and effects |
 | `shape-generator.ts` | Portal | SVG parsing, Bezier flattening, earcut triangulation, nesting-based hole detection |
 | `depth-analysis.ts` | Parallax | Adaptive parameter derivation from depth histograms |
+| `depth-estimator.ts` | Shared | Browser-based monocular depth estimation via ONNX Runtime Web (Depth Anything v2) — lazily loaded, double-buffered. **Experimental / deferred** — see [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md) |
 | `precomputed-depth.ts` | Shared | Binary depth loading, parsing, keyframe interpolation |
 | `input-handler.ts` | Shared | Mouse/gyro input with smoothing |
 | `video-source.ts` | Shared | Video element creation + frame extraction |
@@ -86,7 +87,7 @@ Each folder contains: `ComponentName.tsx`, `ComponentName.stories.tsx`, `Compone
 
 | File | Purpose |
 |------|---------|
-| `precompute-depth.ts` | CLI: generate depth maps from video via Depth Anything v2 |
+| `precompute-depth.ts` | CLI: generate depth maps from video or static image via Depth Anything v2 |
 | `package-output.ts` | CLI: package component + assets for deployment |
 
 ## Parallax Effect
@@ -204,6 +205,8 @@ Shadow DOM encapsulates a `<canvas>` (WebGPU or WebGL 2, selected at runtime) an
 - `src`, `depth-src`, `depth-meta` (required asset paths)
 - `parallax-x`, `parallax-y`, `parallax-max`, `layers`, `overscan` (parallax tuning)
 - `autoplay`, `loop`, `muted` (video behavior)
+- `source-type` (source mode: `video` | `image` | `camera` — default `video`. **Image and camera are experimental / deferred.** See [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md))
+- `depth-model` (URL to ONNX model for browser depth estimation — **experimental / deferred**, see [ADR-014](./adr/ADR-014-browser-depth-estimation.md) and [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md))
 
 **Custom events** (composed, bubble through shadow boundary):
 
@@ -238,6 +241,8 @@ Shadow DOM encapsulates a `<canvas>` (WebGPU or WebGL 2 with stencil, selected a
 - `edge-occlusion-width`, `edge-occlusion-strength` (emissive interior edge ramp)
 - `light-direction` (3D light for chamfer Blinn-Phong)
 - `autoplay`, `loop`, `muted` (video behavior)
+- `source-type` (source mode: `video` | `image` | `camera` — default `video`. **Image and camera are experimental / deferred.** See [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md))
+- `depth-model` (URL to ONNX model for browser depth estimation — **experimental / deferred**, see [ADR-014](./adr/ADR-014-browser-depth-estimation.md) and [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md))
 
 **Transparent background**: The portal canvas uses `alpha: true` with `premultipliedAlpha: true`. Areas outside the logo shape are fully transparent, allowing the element to be overlaid on any HTML content via CSS stacking.
 
@@ -278,7 +283,7 @@ The depth system is shared infrastructure — not specific to the parallax effec
 
 ### Generation
 
-`scripts/precompute-depth.ts` extracts frames at 5fps via FFmpeg, runs Depth Anything v2 Small (ONNX) inference, normalizes, resizes to 512x512, applies gentle blur, and writes the binary format.
+`scripts/precompute-depth.ts` extracts frames at 5fps via FFmpeg, runs Depth Anything v2 Small (ONNX) inference, normalizes, resizes to 512x512, applies gentle blur, and writes the binary format. Static image inputs are auto-detected by file extension and processed as a single frame without FFmpeg.
 
 ### Runtime Interpolation
 
@@ -351,6 +356,9 @@ Produces a single IIFE file with zero runtime dependencies. No separate asset lo
 | [ADR-011](./adr/ADR-011-shared-render-pass-framework.md) | Shared render pass framework for cross-effect compositing |
 | [ADR-012](./adr/ADR-012-adaptive-quality-scaling.md) | Adaptive quality scaling based on device capability |
 | [ADR-013](./adr/ADR-013-webgpu-renderer-path.md) | WebGPU renderer path with automatic backend selection |
+| [ADR-014](./adr/ADR-014-browser-depth-estimation.md) | Browser-based depth estimation via onnxruntime-web |
+| [ADR-015](./adr/ADR-015-depth-model-variant-selection.md) | Depth model variant selection (Q4F16 quantization) |
+| [ADR-016](./adr/ADR-016-deferred-image-webcam-source-support.md) | Deferred image and webcam source support |
 | **Parallax Effect** | |
 | [depth-derivation-rules.md](./parallax/depth-derivation-rules.md) | Inviolable derivation system rules |
 | [depth-analysis-skills.md](./parallax/depth-analysis-skills.md) | Formal function specifications |

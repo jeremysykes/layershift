@@ -5,6 +5,7 @@ import { LayershiftEffect } from '../LayershiftEffect';
 import { EffectErrorBoundary } from '../EffectErrorBoundary';
 import { VideoSelector, type WebcamState } from '../../molecules/VideoSelector';
 import type { VideoEntry } from '../../../types';
+import { DEPTH_MODEL_URL } from '../../../constants';
 
 interface FullscreenOverlayProps {
   tagName: string;
@@ -102,18 +103,21 @@ export function FullscreenOverlay({
     }
   }, [isTouchDevice]);
 
-  const fullscreenAttrs = isCamera
-    ? { ...attrs, 'source-type': 'camera' }
-    : {
-        ...attrs,
-        ...(video
-          ? {
-              src: video.src,
-              'depth-src': video.depthSrc,
-              'depth-meta': video.depthMeta,
-            }
-          : {}),
-      };
+  const fullscreenAttrs = (() => {
+    if (isCamera) {
+      return { ...attrs, 'source-type': 'camera', 'depth-model': DEPTH_MODEL_URL };
+    }
+    if (!video) return attrs;
+
+    const hasPrecomputedDepth = !!video.depthSrc && !!video.depthMeta;
+    return {
+      ...attrs,
+      src: video.src,
+      ...(hasPrecomputedDepth
+        ? { 'depth-src': video.depthSrc, 'depth-meta': video.depthMeta }
+        : { 'depth-model': DEPTH_MODEL_URL }),
+    };
+  })();
 
   const overlay = (
     <div

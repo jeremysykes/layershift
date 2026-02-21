@@ -24,6 +24,7 @@ import { ParallaxRenderer } from '../../parallax-renderer';
 import { ParallaxRendererWebGPU } from '../../parallax-renderer-webgpu';
 import { detectGPUBackend } from '../../gpu-backend';
 import { createVideoSource, createImageSource, createCameraSource, type MediaSource } from '../../media-source';
+import { createDepthEstimator, type DepthEstimator } from '../../depth-estimator';
 import type { ParallaxInput } from '../../input-handler';
 import type {
   LayershiftReadyDetail,
@@ -32,6 +33,7 @@ import type {
   LayershiftLoopDetail,
   LayershiftFrameDetail,
   LayershiftErrorDetail,
+  LayershiftModelProgressDetail,
 } from './types';
 import { LifecycleManager } from './lifecycle';
 import type { ManagedElement } from './lifecycle';
@@ -50,6 +52,10 @@ const DEFAULTS = {
   loop: true,
   muted: true,
 } as const;
+
+/** Default depth estimation output dimensions (matches precomputed convention). */
+const DEPTH_EST_WIDTH = 512;
+const DEPTH_EST_HEIGHT = 512;
 
 // ---------------------------------------------------------------------------
 // Input handler (scoped to component host element)
@@ -201,20 +207,21 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
 
   static get observedAttributes(): string[] {
     return [
-      'src', 'depth-src', 'depth-meta', 'source-type',
+      'src', 'depth-src', 'depth-meta', 'depth-model', 'source-type',
       'parallax-x', 'parallax-y', 'parallax-max',
       'layers', 'overscan', 'quality', 'gpu-backend',
       'autoplay', 'loop', 'muted',
     ];
   }
 
-  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'source-type'];
+  readonly reinitAttributes = ['src', 'depth-src', 'depth-meta', 'depth-model', 'source-type'];
 
   canInit(): boolean {
     if (this.sourceType === 'camera') return true;
-    return !!this.getAttribute('src')
-      && !!this.getAttribute('depth-src')
-      && !!this.getAttribute('depth-meta');
+    const hasSrc = !!this.getAttribute('src');
+    const hasPrecomputedDepth = !!this.getAttribute('depth-src') && !!this.getAttribute('depth-meta');
+    const hasDepthModel = !!this.getAttribute('depth-model');
+    return hasSrc && (hasPrecomputedDepth || hasDepthModel);
   }
 
   private shadow: ShadowRoot;
@@ -222,6 +229,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
   private renderer: ParallaxRenderer | ParallaxRendererWebGPU | null = null;
   private inputHandler: ComponentInputHandler | null = null;
   private source: MediaSource | null = null;
+  private depthEstimator: DepthEstimator | null = null;
   private loopCount = 0;
   private readonly lifecycle: LifecycleManager;
 
@@ -269,6 +277,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     if (val === 'image') return 'image';
     return 'video';
   }
+  private get depthModel(): string | null { return this.getAttribute('depth-model'); }
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
   private get shouldMute(): boolean { return this.getAttrBool('muted', DEFAULTS.muted); }
@@ -371,10 +380,17 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     if (!this.container) return;
 
     const isCamera = this.sourceType === 'camera';
+    const modelUrl = this.depthModel;
 
     try {
       let source: MediaSource;
       let depthData: PrecomputedDepthData;
+      let estimator: DepthEstimator | null = null;
+
+      // Progress callback for model download — emits events on the host element.
+      const onModelProgress = (p: import('../../depth-estimator').ModelDownloadProgress) => {
+        this.emit<LayershiftModelProgressDetail>('layershift-parallax:model-progress', p);
+      };
 
       if (isCamera) {
         source = await createCameraSource(
@@ -382,32 +398,81 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
           { parent: this.shadow },
         );
         if (signal.aborted) { source.dispose(); return; }
-        depthData = createFlatDepthData(source.width, source.height);
+
+        if (modelUrl) {
+          // Live depth estimation from camera frames
+          estimator = await createDepthEstimator(modelUrl, DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT, onModelProgress);
+          if (signal.aborted) { estimator.dispose(); source.dispose(); return; }
+          depthData = createFlatDepthData(DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT);
+        } else {
+          depthData = createFlatDepthData(source.width, source.height);
+        }
       } else {
         const src = this.getAttribute('src')!;
-        const depthSrc = this.getAttribute('depth-src')!;
-        const depthMeta = this.getAttribute('depth-meta')!;
+        const depthSrc = this.getAttribute('depth-src');
+        const depthMeta = this.getAttribute('depth-meta');
+        const hasPrecomputedDepth = !!depthSrc && !!depthMeta;
 
         const isImage = this.sourceType === 'image'
           || /\.(jpe?g|png|webp|gif|avif|bmp)(\?|$)/i.test(src);
 
-        const [mediaResult, loadedDepth] = await Promise.all([
-          isImage
-            ? createImageSource(src)
-            : createVideoSource(src, {
-                parent: this.shadow,
-                loop: this.shouldLoop,
-                muted: this.shouldMute,
-              }),
-          loadPrecomputedDepth(depthSrc, depthMeta),
-        ]);
+        if (hasPrecomputedDepth) {
+          // Existing path: precomputed depth data
+          const [mediaResult, loadedDepth] = await Promise.all([
+            isImage
+              ? createImageSource(src)
+              : createVideoSource(src, {
+                  parent: this.shadow,
+                  loop: this.shouldLoop,
+                  muted: this.shouldMute,
+                }),
+            loadPrecomputedDepth(depthSrc!, depthMeta!),
+          ]);
 
-        if (signal.aborted) { mediaResult.dispose(); return; }
-        source = mediaResult;
-        depthData = loadedDepth;
+          if (signal.aborted) { mediaResult.dispose(); return; }
+          source = mediaResult;
+          depthData = loadedDepth;
+        } else if (modelUrl) {
+          // New path: on-the-fly depth estimation
+          const [mediaResult, est] = await Promise.all([
+            isImage
+              ? createImageSource(src)
+              : createVideoSource(src, {
+                  parent: this.shadow,
+                  loop: this.shouldLoop,
+                  muted: this.shouldMute,
+                }),
+            createDepthEstimator(modelUrl, DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT, onModelProgress),
+          ]);
+
+          if (signal.aborted) { mediaResult.dispose(); est.dispose(); return; }
+          source = mediaResult;
+          estimator = est;
+
+          if (isImage || !source.isLive) {
+            // For static sources, run one estimation pass and wait
+            const imgSrc = source.getImageSource();
+            if (imgSrc) {
+              const depthFrame = await estimator.submitFrameAndWait(imgSrc);
+              depthData = {
+                meta: { frameCount: 1, fps: 1, width: DEPTH_EST_WIDTH, height: DEPTH_EST_HEIGHT, sourceFps: 1 },
+                frames: [depthFrame],
+              };
+            } else {
+              depthData = createFlatDepthData(DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT);
+            }
+          } else {
+            // For live video sources, use flat depth initially — estimator
+            // will provide real depth asynchronously via the RVFC callback.
+            depthData = createFlatDepthData(DEPTH_EST_WIDTH, DEPTH_EST_HEIGHT);
+          }
+        } else {
+          throw new Error('Either depth-src/depth-meta or depth-model must be provided.');
+        }
       }
 
       this.source = source;
+      this.depthEstimator = estimator;
       this.loopCount = 0;
       this.attachSourceEventListeners(source);
 
@@ -418,16 +483,27 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
       );
       const derivedParams = deriveParallaxParams(depthProfile);
 
+      // Use viewport (container) width so that parallax-max produces
+      // consistent visual displacement regardless of source resolution.
+      // A 4096px image and a 1280px video both produce the same on-screen
+      // pixel shift when rendered in the same container.
+      const viewportWidth = this.container?.clientWidth || source.width;
       const parallaxStrength = this.hasAttribute('parallax-max')
-        ? this.parallaxMax / Math.max(source.width, 1)
+        ? this.parallaxMax / Math.max(viewportWidth, 1)
         : derivedParams.parallaxStrength;
 
       const overscanPadding = this.hasAttribute('overscan')
         ? this.overscan
         : derivedParams.overscanPadding;
 
-      const interpolator = new DepthFrameInterpolator(depthData);
-      const readDepth = (timeSec: number) => interpolator.sample(timeSec);
+      // Depth read callback: use estimator if available, otherwise interpolator.
+      let readDepth: (timeSec: number) => Uint8Array;
+      if (estimator) {
+        readDepth = () => estimator!.getLatestDepth();
+      } else {
+        const interpolator = new DepthFrameInterpolator(depthData);
+        readDepth = (timeSec: number) => interpolator.sample(timeSec);
+      }
 
       const backend = await detectGPUBackend(this.gpuBackend);
 
@@ -463,6 +539,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
 
       const pxFactor = this.parallaxX;
       const pyFactor = this.parallaxY;
+      const currentEstimator = estimator;
 
       this.renderer.start(
         source,
@@ -476,6 +553,11 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
           };
         },
         (currentTime: number, frameNumber: number) => {
+          // Submit frame for live depth estimation on each new video frame
+          if (currentEstimator) {
+            const imgSrc = source.getImageSource();
+            if (imgSrc) currentEstimator.submitFrame(imgSrc);
+          }
           this.emit<LayershiftFrameDetail>('layershift-parallax:frame', {
             currentTime,
             frameNumber,
@@ -517,6 +599,9 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
 
     this.inputHandler?.dispose();
     this.inputHandler = null;
+
+    this.depthEstimator?.dispose();
+    this.depthEstimator = null;
 
     this.source?.dispose();
     this.source = null;

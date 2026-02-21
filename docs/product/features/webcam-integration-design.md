@@ -2,8 +2,10 @@
 
 > **Author:** Senior Product Designer
 > **Date:** 2026-02-20
-> **Status:** Proposal
+> **Status:** Deferred — see [ADR-016](../../adr/ADR-016-deferred-image-webcam-source-support.md)
 > **Scope:** `VideoSelector` filmstrip, `EffectSection` orchestration, `FullscreenOverlay`
+
+> **Deferral Note (2026-02-20):** The webcam tile UI components were implemented (see `EffectSection.tsx`, `VideoSelector.tsx`) but are hidden from the site via `showWebcam={false}`. Browser-based depth estimation for camera sources does not produce depth quality on par with precomputed video depth — the parallax effect shows visible depth flickering. Camera support is deferred until temporal depth filtering or a higher-quality model is available. The design below remains the target specification for when camera support is re-enabled.
 
 ---
 

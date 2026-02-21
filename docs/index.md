@@ -12,6 +12,7 @@ Technical reference for the Layershift video effects library — architecture, e
 - [System Architecture](./architecture.md) — module map, effect pipelines, build system
 - [Parallax Effect](./parallax/depth-derivation-rules.md) — depth-derived parameter system and constraints
 - [Portal Effect](./portal/portal-overview.md) — multi-pass stencil compositing and API reference
+- [Product Roadmap](./product/roadmap.md) — phased feature plan with current status
 
 ## Effect Documentation
 
@@ -55,3 +56,12 @@ Visual specifications for data flow, lifecycle, and pipeline architecture.
 - [ADR-005: Logo Depth Portal Effect](./adr/ADR-005-logo-depth-portal-effect.md)
 - [ADR-006: Portal v4 Emissive Chamfer](./adr/ADR-006-portal-v4-emissive-chamfer-nesting.md)
 - [ADR-007: VitePress Documentation Wiki](./adr/ADR-007-vitepress-documentation-wiki.md)
+- [ADR-008: Storybook Atomic Design](./adr/ADR-008-storybook-atomic-design-components.md)
+- [ADR-009: GPU Bilateral Filter](./adr/ADR-009-gpu-bilateral-filter.md)
+- [ADR-010: Multi-Pass Renderer](./adr/ADR-010-multi-pass-renderer-architecture.md)
+- [ADR-011: Render Pass Framework](./adr/ADR-011-shared-render-pass-framework.md)
+- [ADR-012: Adaptive Quality](./adr/ADR-012-adaptive-quality-scaling.md)
+- [ADR-013: WebGPU Renderer](./adr/ADR-013-webgpu-renderer-path.md)
+- [ADR-014: Browser Depth Estimation](./adr/ADR-014-browser-depth-estimation.md)
+- [ADR-015: Depth Model Selection](./adr/ADR-015-depth-model-variant-selection.md)
+- [ADR-016: Deferred Image/Webcam Support](./adr/ADR-016-deferred-image-webcam-source-support.md)

@@ -73,14 +73,6 @@ float edgeFade(vec2 uv) {
   return fadeX * fadeY;
 }
 
-/**
- * Compute a subtle vignette darkening factor.
- */
-float vignette(vec2 uv) {
-  float dist = length(uv - 0.5) * 1.4;
-  return 1.0 - pow(dist, 2.5);
-}
-
 // ---- Displacement functions ----
 
 /**
@@ -159,9 +151,6 @@ void main() {
     texture(uImage, displaced + vec2( 0.0, -uImageTexelSize.y))
   ) * 0.25;
   color = mix(color, blurred, dof);
-
-  // Vignette (screen-space, not texture-space)
-  color.rgb *= vignette(vScreenUv);
 
   fragColor = color;
 }

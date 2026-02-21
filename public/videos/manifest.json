@@ -81,6 +81,14 @@
 			"depthSrc": "/videos/textural/neon-energy/depth-data.bin",
 			"depthMeta": "/videos/textural/neon-energy/depth-meta.json",
 			"thumb": "/videos/textural/neon-energy/thumb.jpg"
+		},
+		{
+			"id": "test-image",
+			"type": "image",
+			"src": "/videos/parallax/test-image/test-image.jpeg",
+			"depthSrc": "/videos/parallax/test-image/depth-data.bin",
+			"depthMeta": "/videos/parallax/test-image/depth-meta.json",
+			"thumb": "/videos/parallax/test-image/thumb.jpg"
 		}
 	]
 }
