@@ -15,6 +15,7 @@ import type {
   LayershiftLoopDetail,
   LayershiftFrameDetail,
   LayershiftErrorDetail,
+  LayershiftModelProgressDetail,
 } from '../../src/components/layershift/types';
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,19 @@ describe('Event type definitions', () => {
     expect(detail.message).toBe('test error');
   });
 
+  it('LayershiftModelProgressDetail has correct shape', () => {
+    const detail: LayershiftModelProgressDetail = {
+      receivedBytes: 5_000_000,
+      totalBytes: 19_000_000,
+      fraction: 0.26,
+      label: 'Downloading depth model\u2026',
+    };
+    expect(detail.receivedBytes).toBe(5_000_000);
+    expect(detail.totalBytes).toBe(19_000_000);
+    expect(detail.fraction).toBeCloseTo(0.26);
+    expect(detail.label).toBe('Downloading depth model\u2026');
+  });
+
   it('LayershiftEventMap contains all event names', () => {
     // This is a compile-time check — if a key is missing, TS will error.
     type EventNames = keyof LayershiftEventMap;
@@ -73,8 +87,9 @@ describe('Event type definitions', () => {
       'layershift-parallax:loop',
       'layershift-parallax:frame',
       'layershift-parallax:error',
+      'layershift-parallax:model-progress',
     ];
-    expect(names).toHaveLength(6);
+    expect(names).toHaveLength(7);
   });
 });
 

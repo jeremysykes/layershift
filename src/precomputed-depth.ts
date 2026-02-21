@@ -227,6 +227,19 @@ function validateDepthMeta(meta: Partial<DepthMeta>): void {
   }
 }
 
+/**
+ * Generate a single-frame flat depth map (mid-gray 128) for sources
+ * that lack precomputed depth data, such as live camera feeds.
+ */
+export function createFlatDepthData(width: number, height: number): PrecomputedDepthData {
+  const frame = new Uint8Array(width * height);
+  frame.fill(128);
+  return {
+    meta: { frameCount: 1, fps: 1, width, height, sourceFps: 1 },
+    frames: [frame],
+  };
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

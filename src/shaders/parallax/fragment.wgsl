@@ -37,11 +37,6 @@ fn edgeFade(uv: vec2f) -> f32 {
   return fadeX * fadeY;
 }
 
-fn vignette(uv: vec2f) -> f32 {
-  let dist = length(uv - 0.5) * 1.4;
-  return 1.0 - pow(dist, 2.5);
-}
-
 // ---- Displacement functions ----
 
 fn basicDisplace(uv: vec2f) -> vec2f {
@@ -124,9 +119,6 @@ fn fs_main(
     textureSampleLevel(imageTex, imageSampler, displaced + vec2f( 0.0, -ts.y), 0.0)
   ) * 0.25;
   color = mix(color, blurred, dof);
-
-  // Vignette (screen-space, not texture-space)
-  color = vec4f(color.rgb * vignette(screenUv), color.a);
 
   return color;
 }

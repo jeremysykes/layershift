@@ -16,6 +16,7 @@
  * `disposeRenderer()`, and `onContextRestored()`.
  */
 
+import type { MediaSource } from './media-source';
 import type { ParallaxInput } from './input-handler';
 import type { QualityParams } from './quality';
 
@@ -43,6 +44,10 @@ export abstract class RendererBase {
   // ---- Video dimensions (for cover-fit calculation) ----
   protected videoAspect = 16 / 9;
 
+  // ---- Camera mode (selfie mirror) ----
+  /** When true, computeCoverFitUV mirrors the X-axis for selfie mode. */
+  protected isCameraSource = false;
+
   // ---- UV transform for cover-fit + overscan ----
   protected uvOffset = [0, 0];
   protected uvScale = [1, 1];
@@ -50,7 +55,7 @@ export abstract class RendererBase {
   // ---- Callbacks ----
   protected readDepth: ((timeSec: number) => Uint8Array) | null = null;
   protected readInput: (() => ParallaxInput) | null = null;
-  protected playbackVideo: HTMLVideoElement | null = null;
+  protected mediaSource: MediaSource | null = null;
   /**
    * Optional callback invoked on each new video frame (from RVFC).
    * The Web Component uses this to dispatch frame events.
@@ -88,30 +93,33 @@ export abstract class RendererBase {
   /**
    * Begin the render loop.
    *
-   * When `requestVideoFrameCallback` is available, two loops run:
+   * For live sources (video/camera) with RVFC support, two loops run:
    * 1. RVFC loop — fires once per new video frame, handles depth update.
    * 2. RAF loop — fires at display refresh rate, handles input + render.
    *
-   * When RVFC is not available, falls back to a single RAF loop.
+   * For static sources (image) or when RVFC is unavailable, RAF-only.
    */
   start(
-    video: HTMLVideoElement,
+    source: MediaSource,
     readDepth: (timeSec: number) => Uint8Array,
     readInput: () => ParallaxInput,
     onVideoFrame?: (currentTime: number, frameNumber: number) => void
   ): void {
     this.stop();
 
-    this.playbackVideo = video;
+    this.mediaSource = source;
     this.readDepth = readDepth;
     this.readInput = readInput;
     this.onVideoFrame = onVideoFrame ?? null;
 
-    this.rvfcSupported = RendererBase.isRVFCSupported();
+    // RVFC is only available on live sources that expose the callback.
+    this.rvfcSupported = source.isLive && typeof source.requestVideoFrameCallback === 'function';
 
-    // Start the RVFC loop for depth updates (only when supported).
     if (this.rvfcSupported) {
-      this.rvfcHandle = video.requestVideoFrameCallback(this._videoFrameLoop);
+      this.rvfcHandle = source.requestVideoFrameCallback!(this._videoFrameLoop);
+    } else if (!source.isLive) {
+      // Static source: fire a single depth update at time 0.
+      this.onDepthUpdate(source.currentTime);
     }
 
     // Always start the RAF loop for input + rendering.
@@ -125,12 +133,12 @@ export abstract class RendererBase {
       this.animationFrameHandle = 0;
     }
 
-    if (this.rvfcHandle && this.playbackVideo) {
-      this.playbackVideo.cancelVideoFrameCallback(this.rvfcHandle);
+    if (this.rvfcHandle && this.mediaSource?.cancelVideoFrameCallback) {
+      this.mediaSource.cancelVideoFrameCallback(this.rvfcHandle);
       this.rvfcHandle = 0;
     }
 
-    this.playbackVideo = null;
+    this.mediaSource = null;
     this.readDepth = null;
     this.readInput = null;
     this.onVideoFrame = null;
@@ -187,12 +195,12 @@ export abstract class RendererBase {
     _now: DOMHighResTimeStamp,
     metadata: VideoFrameCallbackMetadata
   ) => {
-    const video = this.playbackVideo;
-    if (!video) return;
+    const source = this.mediaSource;
+    if (!source || !source.requestVideoFrameCallback) return;
 
-    this.rvfcHandle = video.requestVideoFrameCallback(this._videoFrameLoop);
+    this.rvfcHandle = source.requestVideoFrameCallback(this._videoFrameLoop);
 
-    const timeSec = metadata.mediaTime ?? video.currentTime;
+    const timeSec = metadata.mediaTime ?? source.currentTime;
     this.onDepthUpdate(timeSec);
 
     if (this.onVideoFrame) {
@@ -347,6 +355,14 @@ export abstract class RendererBase {
 
     this.uvOffset = [(1.0 - scaleU) / 2.0, (1.0 - scaleV) / 2.0];
     this.uvScale = [scaleU, scaleV];
+
+    // Selfie mirror: negate uvScale.x so that baseUv 0→1 maps to the
+    // reverse UV range, giving a horizontal mirror. Each renderer picks
+    // this up when it writes the UV uniforms to the GPU.
+    if (this.isCameraSource) {
+      this.uvOffset[0] += this.uvScale[0];
+      this.uvScale[0] = -this.uvScale[0];
+    }
   }
 
   // -----------------------------------------------------------------------

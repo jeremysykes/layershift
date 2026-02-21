@@ -34,13 +34,18 @@ function shuffle<T>(arr: T[]): T[] {
 
 /**
  * Returns the video pool for the current effect's category.
+ *
+ * Static image and camera sources are excluded — the offline depth
+ * model (Depth Anything v1 Small) doesn't produce results on par with
+ * the precomputed video depth pipeline. See ADR-015 for details and
+ * the plan to revisit with a higher-quality model.
  */
 export function getVideosForEffect(
   videos: VideoManifest,
   activeEffect: string,
 ): VideoEntry[] {
   const category = EFFECT_VIDEO_CATEGORY[activeEffect] ?? 'parallax';
-  return videos[category];
+  return videos[category].filter((v) => v.type !== 'image');
 }
 
 /**

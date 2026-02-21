@@ -12,3 +12,6 @@ test-results
 docs/.vitepress/cache
 docs/.vitepress/dist
 storybook-static
+
+# ONNX model binaries (served from public/ for dev, CDN for prod)
+*.onnx

@@ -28,6 +28,9 @@ export default defineConfig({
     copyPublicDir: false,
     minify: 'esbuild',
     rollupOptions: {
+      // onnxruntime-web is a peer dependency — consumers who need depth
+      // estimation should install it alongside layershift.
+      external: [/onnxruntime-web/],
       output: {
         inlineDynamicImports: true,
       },

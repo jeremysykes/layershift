@@ -139,24 +139,28 @@ export function createNearestSampler(device: GPUDevice): GPUSampler {
 }
 
 // ---------------------------------------------------------------------------
-// Video import
+// Image source import
 // ---------------------------------------------------------------------------
 
 /**
- * Import a video frame into a WebGPU texture using `copyExternalImageToTexture`.
+ * Import a CanvasImageSource into a WebGPU texture via `copyExternalImageToTexture`.
  *
- * This is the WebGPU equivalent of `gl.texImage2D(gl.TEXTURE_2D, ..., video)`.
- * On supported browsers, this is a zero-copy operation.
+ * Accepts HTMLVideoElement, HTMLImageElement, HTMLCanvasElement, or
+ * ImageBitmap — any source supported by the WebGPU copy API. On
+ * supported browsers the video path is a zero-copy operation.
  */
-export function importVideoFrame(
+export function importImageSource(
   device: GPUDevice,
   texture: GPUTexture,
-  video: HTMLVideoElement,
-  flipY = true
+  source: GPUCopyExternalImageSource,
+  width: number,
+  height: number,
+  flipY = true,
 ): void {
   device.queue.copyExternalImageToTexture(
-    { source: video, flipY },
+    { source, flipY },
     { texture },
-    [video.videoWidth, video.videoHeight]
+    [width, height],
   );
 }
+

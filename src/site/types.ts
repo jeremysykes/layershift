@@ -20,6 +20,8 @@ export interface VideoEntry {
   src: string;
   depthSrc: string;
   depthMeta: string;
+  /** Source type — 'video' (default) or 'image'. */
+  type?: 'video' | 'image';
   /** Display label for the video selector (e.g. "Fashion Rain") */
   label?: string;
   /** Thumbnail image URL (160×90 JPEG) */

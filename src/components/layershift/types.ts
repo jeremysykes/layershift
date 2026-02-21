@@ -59,6 +59,18 @@ export interface LayershiftErrorDetail {
   message: string;
 }
 
+/** Fired during depth model download with progress updates. */
+export interface LayershiftModelProgressDetail {
+  /** Bytes received so far. */
+  receivedBytes: number;
+  /** Total bytes (from Content-Length header), or null if unknown. */
+  totalBytes: number | null;
+  /** Download fraction 0–1 (0 if total is unknown). */
+  fraction: number;
+  /** Human-readable status label (e.g. "Downloading depth model…"). */
+  label: string;
+}
+
 /**
  * Map of all custom events dispatched by `<layershift-parallax>`.
  *
@@ -76,6 +88,7 @@ export interface LayershiftEventMap {
   'layershift-parallax:loop': CustomEvent<LayershiftLoopDetail>;
   'layershift-parallax:frame': CustomEvent<LayershiftFrameDetail>;
   'layershift-parallax:error': CustomEvent<LayershiftErrorDetail>;
+  'layershift-parallax:model-progress': CustomEvent<LayershiftModelProgressDetail>;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,4 +249,5 @@ export interface LayershiftPortalEventMap {
   'layershift-portal:loop': CustomEvent<LayershiftPortalLoopDetail>;
   'layershift-portal:frame': CustomEvent<LayershiftPortalFrameDetail>;
   'layershift-portal:error': CustomEvent<LayershiftPortalErrorDetail>;
+  'layershift-portal:model-progress': CustomEvent<LayershiftModelProgressDetail>;
 }

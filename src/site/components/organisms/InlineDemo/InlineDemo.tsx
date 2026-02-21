@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Maximize2 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import { LayershiftEffect } from '../LayershiftEffect';
+import { LayershiftEffect, type ModelProgressDetail } from '../LayershiftEffect';
 import { EffectErrorBoundary } from '../EffectErrorBoundary';
 import { Skeleton } from '../../atoms/Skeleton';
 import type { VideoEntry } from '../../../types';
+import { DEPTH_MODEL_URL } from '../../../constants';
 
 interface InlineDemoProps {
   tagName: string;
   demoAttrs: Record<string, string>;
   video: VideoEntry | null;
+  /** When true, the demo uses the camera instead of a video source. */
+  isCamera?: boolean;
   /** Called when the user clicks the fullscreen trigger */
   onEnterFullscreen?: () => void;
 }
@@ -20,7 +23,7 @@ interface InlineDemoProps {
  * scrolls near the viewport (200 px ahead), avoiding unnecessary GPU
  * and network cost for content the user hasn't reached yet.
  */
-export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: InlineDemoProps) {
+export function InlineDemo({ tagName, demoAttrs, video, isCamera, onEnterFullscreen }: InlineDemoProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [ready, setReady] = useState(false);
@@ -29,10 +32,16 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
     typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
   );
 
-  // Reset ready state when video changes
+  // Model download progress (only shown for camera/estimator mode)
+  const [modelProgress, setModelProgress] = useState<ModelProgressDetail | null>(null);
+
+  const sourceKey = isCamera ? '__camera__' : video?.id;
+
+  // Reset ready state and progress when source changes
   useEffect(() => {
     setReady(false);
-  }, [video?.id]);
+    setModelProgress(null);
+  }, [sourceKey]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -53,16 +62,36 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
   }, []);
 
   const attrs = useMemo(() => {
+    if (isCamera) {
+      return { ...demoAttrs, 'source-type': 'camera', 'depth-model': DEPTH_MODEL_URL };
+    }
     if (!video) return demoAttrs;
+
+    const hasPrecomputedDepth = !!video.depthSrc && !!video.depthMeta;
     return {
       ...demoAttrs,
       src: video.src,
-      'depth-src': video.depthSrc,
-      'depth-meta': video.depthMeta,
+      ...(hasPrecomputedDepth
+        ? { 'depth-src': video.depthSrc, 'depth-meta': video.depthMeta }
+        : { 'depth-model': DEPTH_MODEL_URL }),
     };
-  }, [demoAttrs, video]);
+  }, [demoAttrs, video, isCamera]);
 
   const handleReady = useCallback(() => setReady(true), []);
+
+  const handleModelProgress = useCallback((detail: ModelProgressDetail) => {
+    setModelProgress(detail);
+  }, []);
+
+  // Format bytes for display (e.g. "12.5 MB")
+  const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Determine if we should show the model progress overlay
+  const showProgress = modelProgress && !ready && modelProgress.fraction < 1;
 
   return (
     <div
@@ -74,7 +103,7 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
     >
       {visible && (
         <EffectErrorBoundary
-          key={`${tagName}-${video?.id}`}
+          key={`${tagName}-${sourceKey}`}
           fallback={
             <div
               className="flex flex-col items-center justify-center gap-2"
@@ -85,7 +114,12 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
             </div>
           }
         >
-          <LayershiftEffect tagName={tagName} attrs={attrs} onReady={handleReady} />
+          <LayershiftEffect
+            tagName={tagName}
+            attrs={attrs}
+            onReady={handleReady}
+            onModelProgress={handleModelProgress}
+          />
         </EffectErrorBoundary>
       )}
       <Skeleton
@@ -95,6 +129,29 @@ export function InlineDemo({ tagName, demoAttrs, video, onEnterFullscreen }: Inl
           ready && 'skeleton-fade-out',
         )}
       />
+
+      {/* Model download progress overlay */}
+      {showProgress && (
+        <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 pointer-events-none">
+          <span className="text-[0.8rem] font-medium" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+            {modelProgress.label}
+          </span>
+          <div className="w-48 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255, 255, 255, 0.1)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-300 ease-out"
+              style={{
+                width: `${Math.round(modelProgress.fraction * 100)}%`,
+                background: 'linear-gradient(90deg, #3b82f6, #10b981)',
+              }}
+            />
+          </div>
+          {modelProgress.totalBytes && (
+            <span className="text-[0.7rem]" style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
+              {formatBytes(modelProgress.receivedBytes)} / {formatBytes(modelProgress.totalBytes)}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Fullscreen trigger */}
       {onEnterFullscreen && (

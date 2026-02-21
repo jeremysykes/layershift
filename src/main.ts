@@ -28,7 +28,7 @@ import {
   loadPrecomputedDepth,
 } from './precomputed-depth';
 import { UIController } from './ui';
-import { createHiddenVideoElement } from './video-source';
+import { createVideoSource } from './media-source';
 
 // ---------------------------------------------------------------------------
 // Application setup
@@ -61,8 +61,7 @@ void bootstrap().catch((error: unknown) => {
 async function bootstrap(): Promise<void> {
   ui.setLoadingProgress(0.01, 'Loading video metadata and depth data...');
 
-  // Load the video element and binary depth data concurrently.
-  const videoPromise = createHiddenVideoElement(APP_CONFIG.videoUrl);
+  const sourcePromise = createVideoSource(APP_CONFIG.videoUrl);
   const depthDataPromise = loadPrecomputedDepth(
     APP_CONFIG.depthDataUrl,
     APP_CONFIG.depthMetaUrl,
@@ -71,7 +70,7 @@ async function bootstrap(): Promise<void> {
     }
   );
 
-  const [video, depthData] = await Promise.all([videoPromise, depthDataPromise]);
+  const [source, depthData] = await Promise.all([sourcePromise, depthDataPromise]);
 
   // Analyze depth data and derive optimal parallax parameters.
   // Runs once, synchronous, <5ms. Falls back to calibrated defaults
@@ -103,29 +102,26 @@ async function bootstrap(): Promise<void> {
   const interpolator = new DepthFrameInterpolator(depthData);
   const readDepth = (timeSec: number) => interpolator.sample(timeSec);
 
-  // Initialize the renderer with the video element (for video texture)
-  // and the depth map dimensions (for the depth texture).
-  renderer.initialize(video, depthData.meta.width, depthData.meta.height);
+  renderer.initialize(source, depthData.meta.width, depthData.meta.height);
 
-  // Start the render loop. The renderer calls these callbacks each frame:
-  //   readDepth(timeSec) → Uint8Array of depth values [0=near, 255=far]
-  //   readInput()        → { x, y } parallax offset in [-1, 1]
   renderer.start(
-    video,
+    source,
     readDepth,
     () => input.update()
   );
 
-  video.currentTime = 0;
+  if (source.play) {
+    try { await source.play(); } catch { /* Autoplay may be blocked */ }
+  }
 
   ui.hideLoading();
-  configureSpacebarToggle(video);
+  configureSpacebarToggle(source);
   configureMotionPermissionFlow();
 
   window.addEventListener('beforeunload', () => {
     renderer?.dispose();
     input.dispose();
-    video.remove();
+    source.dispose();
   });
 }
 
@@ -133,14 +129,14 @@ async function bootstrap(): Promise<void> {
 // Spacebar play/pause
 // ---------------------------------------------------------------------------
 
-function configureSpacebarToggle(video: HTMLVideoElement): void {
+function configureSpacebarToggle(source: import('./media-source').MediaSource): void {
   window.addEventListener('keydown', (e) => {
     if (e.code !== 'Space') return;
     e.preventDefault();
-    if (video.paused) {
-      void video.play();
+    if (source.paused) {
+      source.play?.();
     } else {
-      video.pause();
+      source.pause?.();
     }
   });
 }

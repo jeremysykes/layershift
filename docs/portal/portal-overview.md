@@ -14,7 +14,7 @@ The Logo Depth Portal (`<layershift-portal>`) renders video through an SVG-shape
 6. **Geometric chamfer** renders a ring of lit triangles around each contour silhouette with Blinn-Phong shading and frosted-glass video passthrough
 7. **Boundary effects** add depth-reactive rim lighting, refraction, chromatic fringe, volumetric edge wall, and occlusion — all driven by the distance field and interior depth
 
-The effect uses the same precomputed depth system as the Parallax effect — binary depth maps generated offline with Depth Anything v2.
+The effect uses the same precomputed depth system as the Parallax effect — binary depth maps generated offline with Depth Anything v2. **Only video sources with precomputed depth are currently supported for production use.** Image and camera (webcam) sources are implemented at the code level but deferred from production — see [ADR-016](../adr/ADR-016-deferred-image-webcam-source-support.md).
 
 ## API Reference
 
