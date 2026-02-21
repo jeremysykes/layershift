@@ -148,6 +148,12 @@ function computeTransitionDuration(
 // FocusInputHandler
 // ---------------------------------------------------------------------------
 
+/** Minimum depth change to update spring target during pointer tracking (prevents jitter). */
+const POINTER_HYSTERESIS = 0.03;
+
+/** Minimum time (ms) focus must be locked before a click can unlock it. */
+const LOCK_MIN_DURATION_MS = 400;
+
 export class FocusInputHandler {
   private config: FocusInputConfig;
   private readonly spring: CriticallyDampedSpring;
@@ -156,6 +162,8 @@ export class FocusInputHandler {
   private lastTime: number | null = null;
   private currentTransitionDuration: number;
   private focusLocked = false;
+  private focusLockedAt = 0;
+  private lastPointerTarget = -1;
 
   // Scroll mode state
   private scrollObserver: IntersectionObserver | null = null;
@@ -214,6 +222,7 @@ export class FocusInputHandler {
 
   resetFocus(): void {
     this.focusLocked = false;
+    this.lastPointerTarget = -1;
     const from = this.spring.value;
     const to = this.config.autoFocusDepth;
     this.currentTransitionDuration = computeTransitionDuration(from, to, this.config.transitionSpeed);
@@ -302,6 +311,13 @@ export class FocusInputHandler {
     const depth = this.sampleAtPointer(event);
     if (depth === null) return;
 
+    // Hysteresis: only update spring target if the new depth differs enough
+    // from the last target. Prevents jitter from noisy depth at boundaries.
+    if (this.lastPointerTarget >= 0 && Math.abs(depth - this.lastPointerTarget) < POINTER_HYSTERESIS) {
+      return;
+    }
+    this.lastPointerTarget = depth;
+
     const from = this.spring.value;
     this.currentTransitionDuration = computeTransitionDuration(from, depth, this.config.transitionSpeed);
     this.spring.setTarget(depth);
@@ -310,6 +326,9 @@ export class FocusInputHandler {
   private readonly handlePointerLeave = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
     if (this.focusLocked) return;
+
+    // Reset pointer tracking state so re-entry starts fresh.
+    this.lastPointerTarget = -1;
 
     if (this.config.mode === 'auto') {
       // Revert to auto-focus depth.
@@ -329,16 +348,23 @@ export class FocusInputHandler {
     if (depth === null) return;
 
     if (this.focusLocked) {
-      // Check if clicking near the same depth — unlock.
-      const currentTarget = this.spring.value;
-      if (Math.abs(depth - currentTarget) < 0.05) {
+      // Require minimum lock duration before allowing unlock (prevents
+      // accidental unlock from rapid clicks or double-clicks).
+      const elapsed = performance.now() - this.focusLockedAt;
+      if (elapsed < LOCK_MIN_DURATION_MS) return;
+
+      // Click near the same depth → unlock (toggle behavior).
+      if (Math.abs(depth - this.lastPointerTarget) < 0.08) {
         this.focusLocked = false;
+        this.lastPointerTarget = -1;
         return;
       }
     }
 
     // Lock focus at clicked depth.
     this.focusLocked = true;
+    this.focusLockedAt = performance.now();
+    this.lastPointerTarget = depth;
     const from = this.spring.value;
     this.currentTransitionDuration = computeTransitionDuration(from, depth, this.config.transitionSpeed);
     this.spring.setTarget(depth);

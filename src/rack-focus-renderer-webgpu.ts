@@ -179,6 +179,10 @@ export class RackFocusRendererWebGPU extends RendererBase {
   private dofWidth = 0;
   private dofHeight = 0;
 
+  // Pre-allocated per-frame scratch buffers (avoids GC pressure from per-frame Float32Array allocations)
+  private readonly cocFocalDepthBuf = new Float32Array(1);
+  private readonly cocBreathBuf = new Float32Array(3);
+
 
   constructor(
     parent: HTMLElement,
@@ -563,15 +567,16 @@ export class RackFocusRendererWebGPU extends RendererBase {
     if (!this.context || !this.cocPipeline || !this.dofBlurPipeline ||
         !this.compositePipeline || !this.quadBuffer) return;
 
+    // Upload video frame if available. If the source is temporarily unavailable
+    // (e.g., during loop seek), skip upload but still render with the last frame
+    // to avoid blank/transparent flashes at loop boundaries.
     const imageSource = source?.getImageSource();
-    if (!imageSource) return;
-
-    // Upload video frame.
-    // Rack focus renders through FBOs (CoC → blur → composite), so use flipY=false
-    // to avoid double-flip. Same pattern as portal renderer. Depth data stays in
-    // natural (top-to-bottom) orientation to match.
-    if (this.videoTexture) {
+    if (imageSource && this.videoTexture) {
+      // Rack focus renders through FBOs (CoC → blur → composite), so use flipY=false
+      // to avoid double-flip. Same pattern as portal renderer.
       importImageSource(this.device, this.videoTexture, imageSource, source!.width, source!.height, false);
+    } else if (!this.videoTexture) {
+      return; // No video texture allocated yet — nothing to render.
     }
 
     // Fallback depth update when RVFC not supported.
@@ -587,14 +592,14 @@ export class RackFocusRendererWebGPU extends RendererBase {
     //   byte 40: breathOffset (vec2f)
     if (this.readFocusState && this.cocUniformBuffer) {
       const state = this.readFocusState();
-      // focalDepth at byte 16.
-      this.device.queue.writeBuffer(this.cocUniformBuffer, 16, new Float32Array([state.focalDepth]));
-      // breathScale + breathOffset at byte 36.
-      this.device.queue.writeBuffer(this.cocUniformBuffer, 36, new Float32Array([
-        state.breathScale,
-        state.breathOffset[0],
-        state.breathOffset[1],
-      ]));
+      // focalDepth at byte 16 — reuse pre-allocated buffer.
+      this.cocFocalDepthBuf[0] = state.focalDepth;
+      this.device.queue.writeBuffer(this.cocUniformBuffer, 16, this.cocFocalDepthBuf);
+      // breathScale + breathOffset at byte 36 — reuse pre-allocated buffer.
+      this.cocBreathBuf[0] = state.breathScale;
+      this.cocBreathBuf[1] = state.breathOffset[0];
+      this.cocBreathBuf[2] = state.breathOffset[1];
+      this.device.queue.writeBuffer(this.cocUniformBuffer, 36, this.cocBreathBuf);
     }
 
     const encoder = this.device.createCommandEncoder();
