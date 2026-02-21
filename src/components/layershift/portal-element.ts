@@ -18,12 +18,13 @@
 import {
   DepthFrameInterpolator,
   loadPrecomputedDepth,
+  createFlatDepthData,
   type PrecomputedDepthData,
 } from '../../precomputed-depth';
 import { PortalRenderer, type PortalRendererConfig } from '../../portal-renderer';
 import { PortalRendererWebGPU } from '../../portal-renderer-webgpu';
 import { detectGPUBackend } from '../../gpu-backend';
-import { createVideoSource, createCameraSource, type MediaSource } from '../../media-source';
+import { createVideoSource, createImageSource, createCameraSource, type MediaSource } from '../../media-source';
 import { generateMeshFromSVG, type ShapeMesh } from '../../shape-generator';
 import type { ParallaxInput } from '../../input-handler';
 import type {
@@ -311,8 +312,11 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
     return [fb[0], fb[1], fb[2]];
   }
 
-  private get sourceType(): 'video' | 'camera' {
-    return this.getAttribute('source-type') === 'camera' ? 'camera' : 'video';
+  private get sourceType(): 'video' | 'image' | 'camera' {
+    const val = this.getAttribute('source-type');
+    if (val === 'camera') return 'camera';
+    if (val === 'image') return 'image';
+    return 'video';
   }
   private get parallaxX(): number { return this.getAttrFloat('parallax-x', DEFAULTS.parallaxX); }
   private get parallaxY(): number { return this.getAttrFloat('parallax-y', DEFAULTS.parallaxY); }
@@ -489,18 +493,23 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         const depthSrc = this.getAttribute('depth-src')!;
         const depthMeta = this.getAttribute('depth-meta')!;
 
-        const [videoSource, loadedDepth, shapeMesh] = await Promise.all([
-          createVideoSource(src, {
-            parent: this.shadow,
-            loop: this.shouldLoop,
-            muted: this.shouldMute,
-          }),
+        const isImage = this.sourceType === 'image'
+          || /\.(jpe?g|png|webp|gif|avif|bmp)(\?|$)/i.test(src);
+
+        const [mediaResult, loadedDepth, shapeMesh] = await Promise.all([
+          isImage
+            ? createImageSource(src)
+            : createVideoSource(src, {
+                parent: this.shadow,
+                loop: this.shouldLoop,
+                muted: this.shouldMute,
+              }),
           loadPrecomputedDepth(depthSrc, depthMeta),
           generateMeshFromSVG(logoSrc),
         ]);
 
-        if (signal.aborted) { videoSource.dispose(); return; }
-        source = videoSource;
+        if (signal.aborted) { mediaResult.dispose(); return; }
+        source = mediaResult;
         depthData = loadedDepth;
         mesh = shapeMesh;
       }
@@ -591,7 +600,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
         }
       );
 
-      if (!isCamera && this.shouldAutoplay && source.play) {
+      if (!isCamera && source.isLive && this.shouldAutoplay && source.play) {
         try { await source.play(); } catch { /* Autoplay blocked */ }
       }
 
@@ -602,7 +611,7 @@ export class LayershiftPortalElement extends HTMLElement implements ManagedEleme
       this.emit<LayershiftPortalReadyDetail>('layershift-portal:ready', {
         videoWidth: source.width,
         videoHeight: source.height,
-        duration: 0,
+        duration: source.duration,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to initialize.';
@@ -639,15 +648,6 @@ function clamp(value: number, min: number, max: number): number {
 
 function lerp(from: number, to: number, amount: number): number {
   return from + (to - from) * amount;
-}
-
-function createFlatDepthData(width: number, height: number): PrecomputedDepthData {
-  const frame = new Uint8Array(width * height);
-  frame.fill(128);
-  return {
-    meta: { frameCount: 1, fps: 1, width, height, sourceFps: 1 },
-    frames: [frame],
-  };
 }
 
 /** Parse a CSS color string (#rrggbb or #rgb) to [r, g, b] in 0-1 range. */

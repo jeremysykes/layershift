@@ -130,16 +130,13 @@ async function bootstrap(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function configureSpacebarToggle(source: import('./media-source').MediaSource): void {
-  let paused = false;
   window.addEventListener('keydown', (e) => {
     if (e.code !== 'Space') return;
     e.preventDefault();
-    if (paused) {
+    if (source.paused) {
       source.play?.();
-      paused = false;
     } else {
       source.pause?.();
-      paused = true;
     }
   });
 }

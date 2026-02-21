@@ -30,6 +30,10 @@ export interface MediaSource {
   readonly width: number;
   readonly height: number;
   readonly currentTime: number;
+  /** Duration in seconds. Infinity for camera, 0 for images, finite for video. */
+  readonly duration: number;
+  /** Whether playback is currently paused. Always false for images. */
+  readonly paused: boolean;
   /** True for video and camera (continuous frame stream). */
   readonly isLive: boolean;
 
@@ -104,6 +108,8 @@ class VideoSourceImpl implements MediaSource {
   get width(): number { return this.video.videoWidth; }
   get height(): number { return this.video.videoHeight; }
   get currentTime(): number { return this.video.currentTime; }
+  get duration(): number { return this.video.duration; }
+  get paused(): boolean { return this.video.paused; }
 
   getImageSource(): TextureImageSource | null {
     if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;
@@ -172,6 +178,8 @@ class ImageSourceImpl implements MediaSource {
   readonly type: MediaSourceType = 'image';
   readonly isLive = false;
   readonly currentTime = 0;
+  readonly duration = 0;
+  readonly paused = false;
 
   constructor(private readonly img: HTMLImageElement) {}
 
@@ -225,6 +233,7 @@ export async function createCameraSource(
 class CameraSourceImpl implements MediaSource {
   readonly type: MediaSourceType = 'camera';
   readonly isLive = true;
+  readonly duration = Infinity;
 
   constructor(
     private readonly video: HTMLVideoElement,
@@ -234,6 +243,7 @@ class CameraSourceImpl implements MediaSource {
   get width(): number { return this.video.videoWidth; }
   get height(): number { return this.video.videoHeight; }
   get currentTime(): number { return this.video.currentTime; }
+  get paused(): boolean { return this.video.paused; }
 
   getImageSource(): TextureImageSource | null {
     if (this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return null;

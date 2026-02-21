@@ -16,6 +16,7 @@
 import {
   DepthFrameInterpolator,
   loadPrecomputedDepth,
+  createFlatDepthData,
   type PrecomputedDepthData,
 } from '../../precomputed-depth';
 import { analyzeDepthFrames, deriveParallaxParams } from '../../depth-analysis';
@@ -262,8 +263,11 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
     if (val === 'webgpu' || val === 'webgl2') return val;
     return 'auto';
   }
-  private get sourceType(): 'video' | 'camera' {
-    return this.getAttribute('source-type') === 'camera' ? 'camera' : 'video';
+  private get sourceType(): 'video' | 'image' | 'camera' {
+    const val = this.getAttribute('source-type');
+    if (val === 'camera') return 'camera';
+    if (val === 'image') return 'image';
+    return 'video';
   }
   private get shouldAutoplay(): boolean { return this.getAttrBool('autoplay', DEFAULTS.autoplay); }
   private get shouldLoop(): boolean { return this.getAttrBool('loop', DEFAULTS.loop); }
@@ -384,7 +388,8 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
         const depthSrc = this.getAttribute('depth-src')!;
         const depthMeta = this.getAttribute('depth-meta')!;
 
-        const isImage = /\.(jpe?g|png|webp|gif|avif|bmp)(\?|$)/i.test(src);
+        const isImage = this.sourceType === 'image'
+          || /\.(jpe?g|png|webp|gif|avif|bmp)(\?|$)/i.test(src);
 
         const [mediaResult, loadedDepth] = await Promise.all([
           isImage
@@ -493,7 +498,7 @@ export class LayershiftElement extends HTMLElement implements ManagedElement {
       this.emit<LayershiftReadyDetail>('layershift-parallax:ready', {
         videoWidth: source.width,
         videoHeight: source.height,
-        duration: 0,
+        duration: source.duration,
         depthProfile,
         derivedParams,
       });
@@ -533,16 +538,3 @@ function lerp(from: number, to: number, amount: number): number {
   return from + (to - from) * amount;
 }
 
-/**
- * Generate a single-frame flat depth map (mid-gray 128) for sources
- * that lack precomputed depth data, such as live camera feeds.
- */
-function createFlatDepthData(width: number, height: number): PrecomputedDepthData {
-  const pixels = width * height;
-  const frame = new Uint8Array(pixels);
-  frame.fill(128);
-  return {
-    meta: { frameCount: 1, fps: 1, width, height, sourceFps: 1 },
-    frames: [frame],
-  };
-}
