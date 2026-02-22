@@ -43,7 +43,8 @@
     "docs:dev": "vitepress dev docs",
     "build:docs": "vitepress build docs",
     "storybook": "storybook dev -p 6006",
-    "build:storybook": "storybook build -o dist/storybook"
+    "build:storybook": "storybook build -o dist/storybook",
+    "dev:editor": "vite --config vite.config.editor.ts"
   },
   "repository": {
     "type": "git",
